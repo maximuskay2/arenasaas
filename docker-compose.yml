@@ -1,0 +1,61 @@
+# Local infrastructure for Arena-SaaS development.
+# Local DB/Redis for Arena-SaaS; use these services when building workers,
+# applying src/db/schema.sql, or running Redis-backed jobs locally.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arena-postgres
+    restart: unless-stopped
+    ports:
+      # Host 5433 avoids clashing with a local PostgreSQL on 5432
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: arena
+      POSTGRES_PASSWORD: arena_dev
+      POSTGRES_DB: arena_dev
+    volumes:
+      - arena_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arena -d arena_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: arena-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - arena_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Optional: docker compose --profile workers up -d
+  # Runs forfeit poller against DB + Redis on the compose network (align DATABASE_* with server/.env after migrate).
+  forfeit-worker:
+    profiles: ["workers"]
+    image: node:22-bookworm-slim
+    working_dir: /workspace/server
+    volumes:
+      - ./:/workspace
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://arena:arena_dev@postgres:5432/arena_dev
+      DATABASE_RUNTIME_URL: postgresql://arena_app:arena_app_dev@postgres:5432/arena_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "cd /workspace/server && npm ci && npm run worker:forfeit"
+
+volumes:
+  arena_pg_data:
+  arena_redis_data:

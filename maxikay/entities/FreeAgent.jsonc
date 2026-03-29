@@ -1,0 +1,72 @@
+{
+  "name": "FreeAgent",
+  "type": "object",
+  "properties": {
+    "player_email": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "bio": {
+      "type": "string"
+    },
+    "preferred_games": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rank": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string",
+      "enum": [
+        "NA",
+        "EU",
+        "LATAM",
+        "ASIA",
+        "OCE",
+        "AF",
+        "ME"
+      ],
+      "default": "NA"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "availability": {
+      "type": "string",
+      "enum": [
+        "weekdays",
+        "weekends",
+        "anytime",
+        "limited"
+      ],
+      "default": "anytime"
+    },
+    "discord_handle": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "wins": {
+      "type": "number",
+      "default": 0
+    },
+    "tournaments_played": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "player_email",
+    "display_name"
+  ]
+}

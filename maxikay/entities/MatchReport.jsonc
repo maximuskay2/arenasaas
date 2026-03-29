@@ -1,0 +1,62 @@
+{
+  "name": "MatchReport",
+  "type": "object",
+  "properties": {
+    "match_id": {
+      "type": "string"
+    },
+    "tournament_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "submitted_by": {
+      "type": "string",
+      "description": "Captain email"
+    },
+    "team_id": {
+      "type": "string"
+    },
+    "team_name": {
+      "type": "string"
+    },
+    "reported_score_a": {
+      "type": "number"
+    },
+    "reported_score_b": {
+      "type": "number"
+    },
+    "screenshot_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Evidence screenshot URLs"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "review_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "match_id",
+    "submitted_by",
+    "reported_score_a",
+    "reported_score_b"
+  ]
+}

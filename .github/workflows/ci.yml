@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  api-and-gates:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arena
+          POSTGRES_PASSWORD: arena_dev
+          POSTGRES_DB: arena_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arena -d arena_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://arena:arena_dev@localhost:5432/arena_dev
+      DATABASE_RUNTIME_URL: postgresql://arena_app:arena_app_dev@localhost:5432/arena_dev
+      ARENA_APP_PASSWORD: arena_app_dev
+      JWT_SECRET: ci-jwt-secret-must-be-at-least-32-characters
+      CI: true
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+      - run: npm ci --prefix server
+
+      - run: npm run migrate --prefix server
+      - run: npm run seed --prefix server
+
+      - run: npm run test:g1
+      - run: npm run test:match-lock
+
+      - run: npm run build
+
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test

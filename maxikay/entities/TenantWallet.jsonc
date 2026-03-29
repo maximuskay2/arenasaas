@@ -1,0 +1,30 @@
+{
+  "name": "TenantWallet",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Reference to Tenant"
+    },
+    "balance": {
+      "type": "number",
+      "default": 0,
+      "description": "Available balance in the tenant wallet"
+    },
+    "currency": {
+      "type": "string",
+      "default": "USD"
+    },
+    "total_credited": {
+      "type": "number",
+      "default": 0
+    },
+    "total_withdrawn": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "tenant_id"
+  ]
+}

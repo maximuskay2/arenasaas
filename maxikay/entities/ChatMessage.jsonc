@@ -1,0 +1,36 @@
+{
+  "name": "ChatMessage",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string"
+    },
+    "match_id": {
+      "type": "string"
+    },
+    "sender_email": {
+      "type": "string"
+    },
+    "sender_name": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "player",
+        "referee",
+        "organizer",
+        "spectator"
+      ],
+      "default": "player"
+    }
+  },
+  "required": [
+    "match_id",
+    "message",
+    "sender_email"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "FanVote",
+  "type": "object",
+  "properties": {
+    "tournament_id": {
+      "type": "string"
+    },
+    "match_id": {
+      "type": "string"
+    },
+    "voter_email": {
+      "type": "string"
+    },
+    "vote_type": {
+      "type": "string",
+      "enum": [
+        "player",
+        "team"
+      ]
+    },
+    "target_email": {
+      "type": "string",
+      "description": "Player email if vote_type=player"
+    },
+    "target_id": {
+      "type": "string",
+      "description": "Team ID if vote_type=team"
+    },
+    "target_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tournament_id",
+    "match_id",
+    "voter_email",
+    "vote_type",
+    "target_name"
+  ]
+}

@@ -1,0 +1,33 @@
+/** Maps frontend entity names (PascalCase) to PostgreSQL table names. */
+export const ENTITY_TO_TABLE = {
+  Tournament: 'tournaments',
+  Match: 'matches',
+  Team: 'teams',
+  Tenant: 'tenants',
+  TenantConfig: 'tenant_configs',
+  TenantEntitlement: 'tenant_entitlements',
+  UserTenant: 'user_tenants',
+  TenantWallet: 'tenant_wallets',
+  WithdrawalRequest: 'withdrawal_requests',
+  PaymentLedger: 'payment_ledger',
+  GameTemplate: 'game_templates',
+  PlayerStat: 'player_stats',
+  FreeAgent: 'free_agents',
+  Sponsor: 'sponsors',
+  MerchandiseItem: 'merchandise_items',
+  MerchandiseOrder: 'merchandise_orders',
+  Notification: 'notifications',
+  AuditLog: 'audit_logs',
+  OTPRecord: 'otp_records',
+  PrizePayment: 'prize_payments',
+  MatchReport: 'match_reports',
+  MatchHighlight: 'match_highlights',
+  FanVote: 'fan_votes',
+  FeedPost: 'feed_posts',
+  FeedComment: 'feed_comments',
+  ChatMessage: 'chat_messages',
+  RescheduleRequest: 'reschedule_requests',
+  DevTodo: 'dev_todos',
+};
+
+export const TABLE_LIST = [...new Set(Object.values(ENTITY_TO_TABLE))];

@@ -1,0 +1,28 @@
+{
+  "name": "PlatformConfig",
+  "type": "object",
+  "properties": {
+    "withdrawal_fee_percent": {
+      "type": "number",
+      "default": 5,
+      "description": "Platform fee % deducted from withdrawals"
+    },
+    "withdrawal_fee_fixed": {
+      "type": "number",
+      "default": 0,
+      "description": "Optional fixed fee per withdrawal in USD"
+    },
+    "min_withdrawal_amount": {
+      "type": "number",
+      "default": 10
+    },
+    "platform_name": {
+      "type": "string",
+      "default": "Arena SaaS"
+    },
+    "support_email": {
+      "type": "string"
+    }
+  },
+  "required": []
+}

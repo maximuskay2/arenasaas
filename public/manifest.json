@@ -1,0 +1,17 @@
+{
+  "name": "ArenaSaaS",
+  "short_name": "ArenaSaaS",
+  "description": "Multi-tenant esports tournament platform for organizers, teams, and fans.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#00e5ff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

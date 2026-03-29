@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ArenaSaaS">
+  <rect width="32" height="32" rx="8" fill="#0c1220"/>
+  <path fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+    d="M8 14h4v6H8zM20 14h4v6h-4zM14 10h4v14h-4"/>
+  <circle cx="11" cy="17" r="1.2" fill="#ff4655"/>
+  <circle cx="21" cy="17" r="1.2" fill="#ff4655"/>
+</svg>
