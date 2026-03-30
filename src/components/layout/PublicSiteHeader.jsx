@@ -1,8 +1,16 @@
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Menu, AlertTriangle, Info } from "lucide-react";
+import { Menu, AlertTriangle, Info, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -10,14 +18,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { topNavLinkClass, topNavTriggerClass } from "@/components/layout/navBarStyles";
 import { maxikay } from "@/api/maxikayClient";
 import { getOrganizerPortalOrigin } from "@/lib/routingLogic";
+import { useAuth } from "@/lib/AuthContext";
 import LiveMatchTicker from "@/components/layout/LiveMatchTicker";
 
-const navLinkClass =
-  "text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-function SectionNavLink({ id, className, children, onNavigate }) {
+function SectionNavLink({ id, className, children, onNavigate = () => {} }) {
   const { pathname } = useLocation();
   if (pathname === "/") {
     return (
@@ -33,8 +40,20 @@ function SectionNavLink({ id, className, children, onNavigate }) {
   );
 }
 
+/** In dropdowns: same hash / landing behavior as SectionNavLink. */
+function DropdownSectionLink({ id, children }) {
+  const { pathname } = useLocation();
+  const to = pathname === "/" ? `#${id}` : `/#${id}`;
+  return (
+    <DropdownMenuItem asChild>
+      <Link to={to}>{children}</Link>
+    </DropdownMenuItem>
+  );
+}
+
 export default function PublicSiteHeader() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
@@ -97,26 +116,61 @@ export default function PublicSiteHeader() {
             <span className="font-display text-lg font-bold tracking-tight">ArenaSaaS</span>
           </Link>
 
-          <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
-            <Link to="/tournaments" className={navLinkClass}>
-              Competitions
+          <nav className="hidden items-center gap-1 md:flex lg:gap-2" aria-label="Primary">
+            <DropdownMenu>
+              <DropdownMenuTrigger className={topNavTriggerClass}>
+                Compete
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                  Tournaments &amp; live
+                </DropdownMenuLabel>
+                <DropdownMenuItem asChild>
+                  <Link to="/tournaments">All competitions</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/rankings">Power rankings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={isAuthenticated ? "/matches" : "/login"}>Match center</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/tournaments" title="Pick'Em tab on each event">
+                    Pick&apos;Em <span className="text-muted-foreground text-xs">(per event)</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>Career hub</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Link to="/community" className={topNavLinkClass}>
+              Community
             </Link>
-            <SectionNavLink id="features" className={navLinkClass}>
-              Features
-            </SectionNavLink>
-            <SectionNavLink id="pricing" className={navLinkClass}>
-              Pricing
-            </SectionNavLink>
-            <SectionNavLink id="faq" className={navLinkClass}>
-              FAQ
-            </SectionNavLink>
-            <Link to="/privacy" className={navLinkClass}>
-              Privacy
-            </Link>
-            <Button variant="outline" size="sm" asChild>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className={topNavTriggerClass}>
+                Resources
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownSectionLink id="features">Features</DropdownSectionLink>
+                <DropdownSectionLink id="pricing">Pricing</DropdownSectionLink>
+                <DropdownSectionLink id="faq">FAQ</DropdownSectionLink>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/privacy">Privacy</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button variant="outline" size="sm" asChild className="ml-1 shrink-0">
               <a href={organizerLoginUrl}>Login</a>
             </Button>
-            <Button size="sm" onClick={() => navigate("/register")}>
+            <Button size="sm" className="shrink-0" onClick={() => navigate("/register")}>
               Register
             </Button>
           </nav>
@@ -136,38 +190,84 @@ export default function PublicSiteHeader() {
               <SheetHeader>
                 <SheetTitle className="font-display text-left">Menu</SheetTitle>
               </SheetHeader>
-              <nav className="mt-8 flex flex-col gap-1" aria-label="Mobile">
+              <nav className="mt-6 flex flex-col gap-1" aria-label="Mobile">
+                <p className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Compete
+                </p>
                 <Link
                   to="/tournaments"
-                  className="rounded-lg px-3 py-3 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
                   onClick={closeMobileNav}
                 >
-                  Upcoming competitions
+                  All competitions
                 </Link>
+                <Link
+                  to="/rankings"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Power rankings
+                </Link>
+                <Link
+                  to={isAuthenticated ? "/matches" : "/login"}
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Match center
+                </Link>
+                <Link
+                  to="/tournaments"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Pick&apos;Em <span className="text-muted-foreground text-xs">(per event)</span>
+                </Link>
+                <Link
+                  to={isAuthenticated ? "/dashboard" : "/login"}
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Career hub
+                </Link>
+
+                <p className="px-3 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border/40 mt-3">
+                  Social
+                </p>
+                <Link
+                  to="/community"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Community
+                </Link>
+
+                <p className="px-3 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border/40 mt-1">
+                  Resources
+                </p>
                 <SectionNavLink
                   id="features"
-                  className="rounded-lg px-3 py-3 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
                   onNavigate={closeMobileNav}
                 >
                   Features
                 </SectionNavLink>
                 <SectionNavLink
                   id="pricing"
-                  className="rounded-lg px-3 py-3 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
                   onNavigate={closeMobileNav}
                 >
                   Pricing
                 </SectionNavLink>
                 <SectionNavLink
                   id="faq"
-                  className="rounded-lg px-3 py-3 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
                   onNavigate={closeMobileNav}
                 >
                   FAQ
                 </SectionNavLink>
                 <Link
                   to="/privacy"
-                  className="rounded-lg px-3 py-3 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
                   onClick={closeMobileNav}
                 >
                   Privacy

@@ -6,6 +6,22 @@ import EmptyState from "../shared/EmptyState";
 import StatusBadge from "../shared/StatusBadge";
 import { Link } from "react-router-dom";
 
+/** Match Center shortcut — aligned with `Matches.jsx`. */
+function matchHasLiveCenterShortcut(status) {
+  return status === "in_progress" || status === "check_in_open" || status === "checked_in";
+}
+
+function LiveCenterLink({ matchId }) {
+  return (
+    <Link
+      to={`/matches/${matchId}/live`}
+      className="inline-flex items-center gap-1 text-[10px] font-display font-bold uppercase tracking-wider text-red-400 hover:text-red-300"
+    >
+      <Radio className="w-3 h-3 shrink-0" /> Live
+    </Link>
+  );
+}
+
 export default function BracketView({ matches, tournamentId, onMatchClick }) {
   const [selectedRound, setSelectedRound] = useState(null);
 
@@ -150,15 +166,23 @@ function MatchNode({ match, onMatchClick }) {
   return (
     <div className="relative space-y-1">
       {onMatchClick ? (
-        <button type="button" className="w-full text-left" onClick={() => onMatchClick(match)}>
-          {inner}
-        </button>
+        <>
+          <button type="button" className="w-full text-left" onClick={() => onMatchClick(match)}>
+            {inner}
+          </button>
+          {matchHasLiveCenterShortcut(match.status) && (
+            <div className="flex justify-end px-0.5">
+              <LiveCenterLink matchId={match.id} />
+            </div>
+          )}
+        </>
       ) : (
         <>
           <Link to={`/matches/${match.id}/lobby`} className="block">
             {inner}
           </Link>
-          <div className="flex justify-end px-0.5">
+          <div className="flex justify-end items-center gap-3 px-0.5 flex-wrap">
+            {matchHasLiveCenterShortcut(match.status) && <LiveCenterLink matchId={match.id} />}
             <Link
               to={`/matches/${match.id}`}
               className="text-[9px] uppercase tracking-wider text-muted-foreground hover:text-primary font-semibold"
@@ -203,15 +227,23 @@ function MatchCard({ match, onMatchClick }) {
   );
 
   return onMatchClick ? (
-    <button type="button" className="w-full text-left" onClick={() => onMatchClick(match)}>
-      {inner}
-    </button>
+    <div className="space-y-1">
+      <button type="button" className="w-full text-left" onClick={() => onMatchClick(match)}>
+        {inner}
+      </button>
+      {matchHasLiveCenterShortcut(match.status) && (
+        <div className="flex justify-end px-0.5">
+          <LiveCenterLink matchId={match.id} />
+        </div>
+      )}
+    </div>
   ) : (
     <div className="space-y-1">
       <Link to={`/matches/${match.id}/lobby`} className="block">
         {inner}
       </Link>
-      <div className="flex justify-end px-0.5">
+      <div className="flex justify-end items-center gap-3 px-0.5 flex-wrap">
+        {matchHasLiveCenterShortcut(match.status) && <LiveCenterLink matchId={match.id} />}
         <Link
           to={`/matches/${match.id}`}
           className="text-[9px] uppercase tracking-wider text-muted-foreground hover:text-primary font-semibold"

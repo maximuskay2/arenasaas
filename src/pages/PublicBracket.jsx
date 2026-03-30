@@ -10,15 +10,17 @@ import { X, Swords, Calendar, ExternalLink, Trophy, Users, ClipboardList } from 
 import moment from "moment";
 
 function MatchDetailModal({ match, onClose }) {
-  if (!match) return null;
-  const isCompleted = match.status === "completed";
   const [showReport, setShowReport] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const canReport = match.status === "in_progress" || match.status === "check_in_open" || match.status === "checked_in";
+  const safeMatch = match || null;
+  const isCompleted = safeMatch?.status === "completed";
+  const canReport = !!safeMatch && (safeMatch.status === "in_progress" || safeMatch.status === "check_in_open" || safeMatch.status === "checked_in");
 
   useEffect(() => {
     maxikay.auth.me().then(setCurrentUser).catch(() => {});
   }, []);
+
+  if (!safeMatch) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -29,7 +31,7 @@ function MatchDetailModal({ match, onClose }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4 text-primary" />
-            <span className="font-display text-xs font-semibold tracking-wider uppercase text-muted-foreground">{match.bracket_position} · Round {match.round}</span>
+            <span className="font-display text-xs font-semibold tracking-wider uppercase text-muted-foreground">{safeMatch.bracket_position} · Round {safeMatch.round}</span>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
@@ -38,19 +40,19 @@ function MatchDetailModal({ match, onClose }) {
         <div className="glass rounded-xl p-5 text-center space-y-2">
           <div className="flex items-center justify-center gap-6">
             <div className="flex-1 text-right">
-              <p className={`font-display font-bold text-base ${isCompleted && match.winner_id === match.team_a_id ? "text-primary" : "text-foreground"}`}>{match.team_a_name || "TBD"}</p>
+              <p className={`font-display font-bold text-base ${isCompleted && safeMatch.winner_id === safeMatch.team_a_id ? "text-primary" : "text-foreground"}`}>{safeMatch.team_a_name || "TBD"}</p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-display font-black text-primary">{match.score_a}</span>
+              <span className="text-3xl font-display font-black text-primary">{safeMatch.score_a}</span>
               <span className="text-muted-foreground">:</span>
-              <span className="text-3xl font-display font-black text-primary">{match.score_b}</span>
+              <span className="text-3xl font-display font-black text-primary">{safeMatch.score_b}</span>
             </div>
             <div className="flex-1 text-left">
-              <p className={`font-display font-bold text-base ${isCompleted && match.winner_id === match.team_b_id ? "text-primary" : "text-foreground"}`}>{match.team_b_name || "TBD"}</p>
+              <p className={`font-display font-bold text-base ${isCompleted && safeMatch.winner_id === safeMatch.team_b_id ? "text-primary" : "text-foreground"}`}>{safeMatch.team_b_name || "TBD"}</p>
             </div>
           </div>
-          {match.winner_name && (
-            <p className="text-xs text-primary font-display font-semibold">🏆 Winner: {match.winner_name}</p>
+          {safeMatch.winner_name && (
+            <p className="text-xs text-primary font-display font-semibold">🏆 Winner: {safeMatch.winner_name}</p>
           )}
         </div>
 
@@ -58,18 +60,18 @@ function MatchDetailModal({ match, onClose }) {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="glass rounded-lg p-3">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Status</p>
-            <div className="mt-1"><StatusBadge status={match.status} /></div>
+            <div className="mt-1"><StatusBadge status={safeMatch.status} /></div>
           </div>
-          {match.scheduled_time && (
+          {safeMatch.scheduled_time && (
             <div className="glass rounded-lg p-3">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-1"><Calendar className="w-3 h-3" /> Scheduled</p>
-              <p className="text-xs font-semibold mt-1">{moment(match.scheduled_time).format("MMM D, h:mm A")}</p>
+              <p className="text-xs font-semibold mt-1">{moment(safeMatch.scheduled_time).format("MMM D, h:mm A")}</p>
             </div>
           )}
         </div>
 
-        {match.notes && (
-          <p className="text-xs text-muted-foreground bg-secondary/40 rounded-lg p-3">{match.notes}</p>
+        {safeMatch.notes && (
+          <p className="text-xs text-muted-foreground bg-secondary/40 rounded-lg p-3">{safeMatch.notes}</p>
         )}
 
         {/* Score Report */}
@@ -82,9 +84,9 @@ function MatchDetailModal({ match, onClose }) {
                   <button onClick={() => setShowReport(false)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
                 </div>
                 <ScoreReportForm
-                  match={match}
+                  match={safeMatch}
                   currentUserEmail={currentUser.email}
-                  tenantId={match.tenant_id}
+                  tenantId={safeMatch.tenant_id}
                   onSubmitted={() => { setShowReport(false); onClose(); }}
                 />
               </div>
@@ -100,7 +102,7 @@ function MatchDetailModal({ match, onClose }) {
         )}
 
         <Link
-          to={`/matches/${match.id}`}
+          to={`/matches/${safeMatch.id}`}
           className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-display font-semibold tracking-wider transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5" /> View Full Match Details

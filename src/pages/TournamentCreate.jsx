@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTenant } from "@/hooks/useTenant";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,6 +39,11 @@ function pickDraftPatch(f) {
     name: f.name?.trim() || undefined,
     game_template_id: f.game_template_id || undefined,
     game_title: f.game_title || undefined,
+    game_title_id: f.game_title_id || undefined,
+    team_roster_size:
+      f.team_roster_size != null && f.team_roster_size !== "" ? Number(f.team_roster_size) : undefined,
+    competition_scoring_type: f.competition_scoring_type || undefined,
+    genre_template_id: f.game_genre_template_id || undefined,
     description: f.description?.trim() || undefined,
     format: f.format,
     max_teams: f.max_teams,
@@ -95,6 +100,16 @@ export default function TournamentCreate() {
     max_teams: 8,
     game_template_id: "",
     game_title: "",
+    game_title_id: "",
+    game_platform_id: "",
+    game_genre_id: "",
+    use_custom_game: false,
+    title_search: "",
+    team_roster_size: 5,
+    competition_scoring_type: "bracket",
+    match_scoring_mode: "best_of_1",
+    game_genre_template_id: "",
+    require_in_game_id: false,
     description: "",
     prize_pool: 0,
     currency: "USD",
@@ -119,6 +134,44 @@ export default function TournamentCreate() {
     ],
   });
 
+  const { data: gamePlatforms = [] } = useQuery({
+    queryKey: ["game-taxonomy-platforms"],
+    queryFn: () => maxikay.public.gameTaxonomyPlatforms(),
+  });
+
+  const { data: genreTemplates = [] } = useQuery({
+    queryKey: ["game-taxonomy-genre-templates"],
+    queryFn: () => maxikay.public.gameTaxonomyGenreTemplates(),
+  });
+
+  const { data: gameGenres = [] } = useQuery({
+    queryKey: ["game-taxonomy-genres", form.game_platform_id],
+    queryFn: () => maxikay.public.gameTaxonomyGenres(form.game_platform_id),
+    enabled: !!form.game_platform_id,
+  });
+
+  const { data: catalogTitles = [] } = useQuery({
+    queryKey: ["game-taxonomy-titles", form.game_platform_id, form.game_genre_id],
+    queryFn: () =>
+      maxikay.public.gameTaxonomyTitles({
+        platform_id: form.game_platform_id,
+        genre_id: form.game_genre_id,
+      }),
+    enabled: !!form.game_platform_id && !!form.game_genre_id && !form.use_custom_game,
+  });
+
+  const filteredCatalogTitles = useMemo(() => {
+    const q = form.title_search.trim().toLowerCase();
+    if (!q) return catalogTitles;
+    return catalogTitles.filter(
+      (t) => t.name?.toLowerCase().includes(q) || t.slug?.toLowerCase().includes(q)
+    );
+  }, [catalogTitles, form.title_search]);
+
+  const createCustomGame = useMutation({
+    mutationFn: (body) => maxikay.gameTaxonomy.createCustom(body),
+  });
+
   const buildDraftPayload = useCallback(() => {
     const start =
       form.start_date ||
@@ -129,6 +182,13 @@ export default function TournamentCreate() {
       name: form.name?.trim() || `Draft — ${form.game_title || "Tournament"}`,
       game_template_id: form.game_template_id,
       game_title: form.game_title,
+      game_title_id: form.game_title_id || undefined,
+      team_roster_size:
+        form.team_roster_size != null && form.team_roster_size !== ""
+          ? Number(form.team_roster_size)
+          : undefined,
+      competition_scoring_type: form.competition_scoring_type || undefined,
+      genre_template_id: form.game_genre_template_id || undefined,
       format: form.format,
       max_teams: form.max_teams,
       prize_pool: 0,
@@ -189,20 +249,46 @@ export default function TournamentCreate() {
     return () => clearTimeout(t);
   }, [form, draftId, step]);
 
-  const handleGameSelect = (templateId) => {
-    const template = gameTemplates.find((g) => g.id === templateId);
-    update("game_template_id", templateId);
-    if (template) {
-      update("game_title", template.title);
-      const rs = Number(template.roster_size);
-      if (Number.isFinite(rs) && rs > 0) {
-        update("max_teams", Math.min(64, Math.max(2, rs * 2)));
-      }
+  const selectCatalogTitle = async (titleRow) => {
+    try {
+      const d = await maxikay.public.gameTaxonomyDefaults(titleRow.id);
+      const tpl = gameTemplates.find((g) => g.title.toLowerCase() === String(d.name).toLowerCase());
+      setForm((prev) => ({
+        ...prev,
+        game_title_id: titleRow.id,
+        game_title: d.name,
+        game_genre_template_id: d.genre_template_id || prev.game_genre_template_id || "",
+        format: d.suggested_format || prev.format,
+        team_roster_size: d.team_roster_size ?? prev.team_roster_size,
+        competition_scoring_type: d.competition_scoring_type || prev.competition_scoring_type,
+        match_scoring_mode: d.match_scoring_mode || prev.match_scoring_mode,
+        require_in_game_id: !!d.require_in_game_id,
+        max_teams: Math.min(
+          64,
+          Math.max(2, (Number(d.team_roster_size) || 5) * 2)
+        ),
+        game_template_id: tpl?.id || "",
+      }));
+    } catch {
+      toast.error("Could not load game defaults.");
     }
   };
 
   const canNext = () => {
-    if (step === 0) return !!form.game_template_id;
+    if (step === 0) {
+      if (form.use_custom_game) {
+        return (
+          !!form.game_platform_id &&
+          !!form.game_genre_id &&
+          !!form.game_genre_template_id &&
+          !!form.game_title?.trim() &&
+          Number(form.team_roster_size) >= 1 &&
+          !!form.competition_scoring_type &&
+          !!form.match_scoring_mode
+        );
+      }
+      return !!form.game_title_id;
+    }
     if (step === 1) return !!form.format && form.max_teams >= 2;
     if (step === 2) return !!form.start_date && !!form.registration_deadline;
     if (step === 3) {
@@ -228,7 +314,20 @@ export default function TournamentCreate() {
     const rulesExtra = form.prize_split_summary
       ? `\n\n--- Prize distribution (organizer intent) ---\n${form.prize_split_summary}\nFunds settle via your configured payout rail (Stripe / Paystack / Flutterwave).`
       : "";
-    const { prize_split_summary, prize_ranks, prize_structure_type, prize_tbd, ...rest } = form;
+    const {
+      prize_split_summary,
+      prize_ranks,
+      prize_structure_type,
+      prize_tbd,
+      game_genre_template_id,
+      game_platform_id,
+      game_genre_id,
+      use_custom_game,
+      title_search,
+      match_scoring_mode,
+      require_in_game_id,
+      ...rest
+    } = form;
     const payout =
       form.payout_config && typeof form.payout_config === "object"
         ? { ...form.payout_config }
@@ -236,6 +335,7 @@ export default function TournamentCreate() {
     const prize_structure = prize_tbd ? {} : buildPrizeStructurePayload(form);
     finishMutation.mutate({
       ...rest,
+      genre_template_id: game_genre_template_id || undefined,
       entry_type: form.entry_type,
       entry_fee: form.entry_type === "FREE" ? 0 : form.entry_fee,
       payout_config: payout,
@@ -255,6 +355,44 @@ export default function TournamentCreate() {
 
   const goNext = async () => {
     if (!canNext()) return;
+    if (step === 0 && form.use_custom_game && !form.game_title_id) {
+      try {
+        const row = await createCustomGame.mutateAsync({
+          name: form.game_title.trim(),
+          genre_id: form.game_genre_id,
+          genre_template_id: form.game_genre_template_id,
+          platform_ids: [form.game_platform_id],
+          default_team_roster_size: Number(form.team_roster_size) || 5,
+          competition_scoring_type: form.competition_scoring_type,
+          match_scoring_mode: form.match_scoring_mode,
+          suggested_format: form.format,
+          require_in_game_id: form.require_in_game_id,
+        });
+        const d = row.defaults || {};
+        const tpl = gameTemplates.find(
+          (g) => g.title.toLowerCase() === String(row.name || "").toLowerCase()
+        );
+        setForm((prev) => ({
+          ...prev,
+          game_title_id: row.id,
+          game_title: row.name,
+          game_genre_template_id: d.genre_template_id || prev.game_genre_template_id,
+          format: d.suggested_format || prev.format,
+          team_roster_size: d.team_roster_size ?? prev.team_roster_size,
+          competition_scoring_type: d.competition_scoring_type || prev.competition_scoring_type,
+          match_scoring_mode: d.match_scoring_mode || prev.match_scoring_mode,
+          require_in_game_id: !!d.require_in_game_id,
+          max_teams:
+            d.team_roster_size != null
+              ? Math.min(64, Math.max(2, Number(d.team_roster_size) * 2))
+              : prev.max_teams,
+          game_template_id: tpl?.id || prev.game_template_id,
+        }));
+      } catch {
+        toast.error("Could not register custom game title.");
+        return;
+      }
+    }
     if (step === 0 && !draftId) {
       try {
         const row = await createDraftRow.mutateAsync();
@@ -326,21 +464,256 @@ export default function TournamentCreate() {
         {step === 0 && (
           <>
             <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">1. Game</h2>
+            <p className="text-xs text-muted-foreground">
+              Pick platform, then category, then title. Defaults for format and roster load from the catalog; you can still change them
+              later.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                id="tc-custom-game"
+                type="checkbox"
+                checked={form.use_custom_game}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setForm((p) => ({
+                    ...p,
+                    use_custom_game: v,
+                    game_title_id: v ? "" : p.game_title_id,
+                    game_title: v ? "" : p.game_title,
+                    title_search: "",
+                    game_template_id: v ? "" : p.game_template_id,
+                    game_genre_template_id: v ? "" : p.game_genre_template_id,
+                  }));
+                }}
+                className="rounded border-border"
+              />
+              <Label htmlFor="tc-custom-game" className="text-xs font-normal cursor-pointer">
+                Other / custom (manual roster and scoring — platform team reviews new titles)
+              </Label>
+            </div>
             <div>
-              <Label>Game title *</Label>
-              <Select value={form.game_template_id} onValueChange={handleGameSelect}>
+              <Label>Platform *</Label>
+              <Select
+                value={form.game_platform_id || undefined}
+                onValueChange={(v) =>
+                  setForm((p) => ({
+                    ...p,
+                    game_platform_id: v,
+                    game_genre_id: "",
+                    game_title_id: "",
+                    game_title: "",
+                    title_search: "",
+                    game_template_id: "",
+                    game_genre_template_id: "",
+                  }))
+                }
+              >
                 <SelectTrigger className="mt-1 bg-secondary/50">
-                  <SelectValue placeholder="Select from game hub" />
+                  <SelectValue placeholder="Mobile, PC, Console…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {gameTemplates.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>
-                      {g.title} (roster {g.roster_size})
+                  {gamePlatforms.map((gp) => (
+                    <SelectItem key={gp.id} value={gp.id}>
+                      {gp.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Genre *</Label>
+              <Select
+                value={form.game_genre_id || undefined}
+                disabled={!form.game_platform_id}
+                onValueChange={(v) =>
+                  setForm((p) => ({
+                    ...p,
+                    game_genre_id: v,
+                    game_title_id: "",
+                    game_title: "",
+                    title_search: "",
+                    game_template_id: "",
+                    game_genre_template_id: "",
+                  }))
+                }
+              >
+                <SelectTrigger className="mt-1 bg-secondary/50">
+                  <SelectValue placeholder={form.game_platform_id ? "MOBA, FPS…" : "Select platform first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {gameGenres.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name} (default roster {g.default_roster_size})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!form.use_custom_game && (
+              <>
+                <div>
+                  <Label>Game title *</Label>
+                  <Input
+                    value={form.title_search}
+                    onChange={(e) => update("title_search", e.target.value)}
+                    placeholder="Search titles…"
+                    disabled={!form.game_genre_id}
+                    className="mt-1 bg-secondary/50"
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-border/60 bg-secondary/20 p-2 space-y-1">
+                  {!form.game_genre_id ? (
+                    <p className="text-xs text-muted-foreground px-2 py-4 text-center">Select platform and genre to list games.</p>
+                  ) : filteredCatalogTitles.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-2 py-4 text-center">No matches — try custom.</p>
+                  ) : (
+                    filteredCatalogTitles.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => void selectCatalogTitle(t)}
+                        className={`w-full text-left rounded-md px-3 py-2 text-sm transition-colors ${
+                          form.game_title_id === t.id
+                            ? "bg-primary/20 text-primary border border-primary/40"
+                            : "hover:bg-secondary/80 border border-transparent"
+                        }`}
+                      >
+                        <span className="font-medium">{t.name}</span>
+                        <span className="text-xs text-muted-foreground block">
+                          {t.genre_name}
+                          {t.genre_template_name ? ` · ${t.genre_template_name}` : ""} · roster {t.default_team_roster_size}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs font-medium"
+                  disabled={!form.game_genre_id}
+                  onClick={() =>
+                    setForm((p) => ({
+                      ...p,
+                      use_custom_game: true,
+                      game_title_id: "",
+                      game_title: "",
+                      title_search: "",
+                      game_template_id: "",
+                      game_genre_template_id: "",
+                    }))
+                  }
+                >
+                  My game is not listed — use a custom title
+                </Button>
+              </>
+            )}
+            {form.use_custom_game && (
+              <>
+                <div>
+                  <Label>Scoring rules template *</Label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 mb-1 leading-relaxed">
+                    Pick the rules profile (FPS/MOBA, battle royale, fighters, card/RTS, team sports, or ladder points). Defaults
+                    below start from the template—you can still adjust.
+                  </p>
+                  <Select
+                    value={form.game_genre_template_id || undefined}
+                    disabled={!form.game_genre_id}
+                    onValueChange={(tid) => {
+                      const tpl = genreTemplates.find((x) => x.id === tid);
+                      setForm((p) => ({
+                        ...p,
+                        game_genre_template_id: tid,
+                        format: tpl?.suggested_format || p.format,
+                        team_roster_size: tpl?.default_team_roster_size ?? p.team_roster_size,
+                        competition_scoring_type: tpl?.competition_scoring_type || p.competition_scoring_type,
+                        match_scoring_mode: tpl?.match_scoring_mode || p.match_scoring_mode,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 bg-secondary/50">
+                      <SelectValue placeholder={form.game_genre_id ? "Template…" : "Select genre first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {genreTemplates.map((tpl) => (
+                        <SelectItem key={tpl.id} value={tpl.id}>
+                          {tpl.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.game_genre_template_id ? (
+                    <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
+                      {genreTemplates.find((x) => x.id === form.game_genre_template_id)?.rules_summary || ""}
+                    </p>
+                  ) : null}
+                </div>
+                <div>
+                  <Label>Custom title *</Label>
+                  <Input
+                    value={form.game_title}
+                    onChange={(e) => update("game_title", e.target.value)}
+                    placeholder="Your game name"
+                    className="mt-1 bg-secondary/50"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Players per team (roster size)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={64}
+                      value={form.team_roster_size}
+                      onChange={(e) => update("team_roster_size", parseInt(e.target.value, 10) || 1)}
+                      className="mt-1 bg-secondary/50"
+                    />
+                  </div>
+                  <div>
+                    <Label>Match scoring</Label>
+                    <Select value={form.match_scoring_mode} onValueChange={(v) => update("match_scoring_mode", v)}>
+                      <SelectTrigger className="mt-1 bg-secondary/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="best_of_1">Best of 1</SelectItem>
+                        <SelectItem value="best_of_3">Best of 3</SelectItem>
+                        <SelectItem value="best_of_5">Best of 5</SelectItem>
+                        <SelectItem value="points">Points-based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>Competition style</Label>
+                  <Select
+                    value={form.competition_scoring_type}
+                    onValueChange={(v) => update("competition_scoring_type", v)}
+                  >
+                    <SelectTrigger className="mt-1 bg-secondary/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bracket">Bracket wins (elimination)</SelectItem>
+                      <SelectItem value="points">Points / leaderboard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="tc-req-ign"
+                    type="checkbox"
+                    checked={form.require_in_game_id}
+                    onChange={(e) => update("require_in_game_id", e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <Label htmlFor="tc-req-ign" className="text-xs font-normal cursor-pointer">
+                    Require in-game ID on rosters
+                  </Label>
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -691,7 +1064,11 @@ export default function TournamentCreate() {
           )}
         </Button>
         {step < STEPS.length - 1 ? (
-          <Button type="button" disabled={!canNext() || createDraftRow.isPending} onClick={() => void goNext()}>
+          <Button
+            type="button"
+            disabled={!canNext() || createDraftRow.isPending || createCustomGame.isPending}
+            onClick={() => void goNext()}
+          >
             Next <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
         ) : (

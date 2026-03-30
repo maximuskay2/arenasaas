@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/rea
 import { useState, useEffect } from "react";
 import { maxikay } from "@/api/maxikayClient";
 import { useTenant } from "@/hooks/useTenant";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, AlertTriangle, Play, Shield, FileText, ClipboardCheck, Radio, Tv } from "lucide-react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { ArrowLeft, Check, AlertTriangle, Play, FileText, ClipboardCheck, Radio, Tv } from "lucide-react";
 import CheckInPanel from "../components/match/CheckInPanel";
 import DisputeResolver from "../components/match/DisputeResolver";
 import MatchReadyBanner from "../components/match/MatchReadyBanner";
@@ -15,7 +15,7 @@ import MatchStreamEmbed from "../components/match/MatchStreamEmbed";
 import GameApiImporter from "../components/match/GameApiImporter";
 import MatchScheduler from "../components/match/MatchScheduler";
 import { sendDiscordNotification } from "../lib/discord";
-import { matchScheduledNotif, opponentCheckedInNotif } from "../lib/notifications";
+import { opponentCheckedInNotif } from "../lib/notifications";
 import { advanceWinner } from "../lib/bracketAdvancement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ function VotingWrapper({ match, currentUser }) {
 }
 
 export default function MatchDetail() {
-  const id = window.location.pathname.split("/matches/")[1];
+  const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -283,9 +283,18 @@ export default function MatchDetail() {
           </div>
         }
         actions={
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-1">
+            {id ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/matches/${id}/live`} className="gap-1">
+                  <Tv className="w-4 h-4" /> Live center
+                </Link>
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </div>
         }
       />
 

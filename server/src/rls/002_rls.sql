@@ -714,38 +714,224 @@ DROP POLICY IF EXISTS cm_upd ON chat_messages;
 DROP POLICY IF EXISTS cm_del ON chat_messages;
 CREATE POLICY cm_sel ON chat_messages FOR SELECT USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
-  OR EXISTS (
-    SELECT 1 FROM tournaments x
-    WHERE x.id::text = chat_messages.tournament_id
-      AND x.tenant_id IS NOT NULL
-      AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  OR (
+    EXISTS (
+      SELECT 1 FROM tournaments x
+      WHERE x.id::text = chat_messages.tournament_id
+        AND x.tenant_id IS NOT NULL
+        AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    )
+    AND (
+      NOT EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+      )
+      OR EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+          AND m.tournament_id = chat_messages.tournament_id
+          AND (
+            -- Viewer must be on team A roster or captain
+            (
+              m.team_a_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM teams ta
+                WHERE ta.id::text = m.team_a_id
+                  AND (
+                    lower(ta.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    OR EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(ta.roster, '[]'::jsonb)) r
+                      WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    )
+                  )
+              )
+            )
+            OR
+            -- Viewer must be on team B roster or captain
+            (
+              m.team_b_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM teams tb
+                WHERE tb.id::text = m.team_b_id
+                  AND (
+                    lower(tb.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    OR EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(tb.roster, '[]'::jsonb)) r
+                      WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    )
+                  )
+              )
+            )
+          )
+      )
+    )
   )
 );
 CREATE POLICY cm_ins ON chat_messages FOR INSERT WITH CHECK (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
-  OR EXISTS (
-    SELECT 1 FROM tournaments x
-    WHERE x.id::text = chat_messages.tournament_id
-      AND x.tenant_id IS NOT NULL
-      AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  OR (
+    EXISTS (
+      SELECT 1 FROM tournaments x
+      WHERE x.id::text = chat_messages.tournament_id
+        AND x.tenant_id IS NOT NULL
+        AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    )
+    AND (
+      NOT EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+      )
+      OR EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+          AND m.tournament_id = chat_messages.tournament_id
+          AND (
+            -- Viewer must be on team A roster or captain
+            (
+              m.team_a_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM teams ta
+                WHERE ta.id::text = m.team_a_id
+                  AND (
+                    lower(ta.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    OR EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(ta.roster, '[]'::jsonb)) r
+                      WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    )
+                  )
+              )
+            )
+            OR
+            -- Viewer must be on team B roster or captain
+            (
+              m.team_b_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM teams tb
+                WHERE tb.id::text = m.team_b_id
+                  AND (
+                    lower(tb.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    OR EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements(COALESCE(tb.roster, '[]'::jsonb)) r
+                      WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                    )
+                  )
+              )
+            )
+          )
+      )
+    )
+    -- Prevent forged sender_email: must match logged-in user's email.
+    AND lower(chat_messages.sender_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
   )
 );
 CREATE POLICY cm_upd ON chat_messages FOR UPDATE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
-  OR EXISTS (
-    SELECT 1 FROM tournaments x
-    WHERE x.id::text = chat_messages.tournament_id
-      AND x.tenant_id IS NOT NULL
-      AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  OR (
+    EXISTS (
+      SELECT 1 FROM tournaments x
+      WHERE x.id::text = chat_messages.tournament_id
+        AND x.tenant_id IS NOT NULL
+        AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    )
+    AND (
+      NOT EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+      )
+      OR EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+          AND m.tournament_id = chat_messages.tournament_id
+          AND (
+            -- viewer on team A or team B (roster or captain)
+            EXISTS (
+              SELECT 1 FROM teams ta
+              WHERE m.team_a_id IS NOT NULL
+                AND ta.id::text = m.team_a_id
+                AND (
+                  lower(ta.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(ta.roster, '[]'::jsonb)) r
+                    WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  )
+                )
+            )
+            OR
+            EXISTS (
+              SELECT 1 FROM teams tb
+              WHERE m.team_b_id IS NOT NULL
+                AND tb.id::text = m.team_b_id
+                AND (
+                  lower(tb.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(tb.roster, '[]'::jsonb)) r
+                    WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  )
+                )
+            )
+          )
+      )
+    )
+    AND lower(chat_messages.sender_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
   )
 );
 CREATE POLICY cm_del ON chat_messages FOR DELETE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
-  OR EXISTS (
-    SELECT 1 FROM tournaments x
-    WHERE x.id::text = chat_messages.tournament_id
-      AND x.tenant_id IS NOT NULL
-      AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  OR (
+    EXISTS (
+      SELECT 1 FROM tournaments x
+      WHERE x.id::text = chat_messages.tournament_id
+        AND x.tenant_id IS NOT NULL
+        AND x.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    )
+    AND (
+      NOT EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+      )
+      OR EXISTS (
+        SELECT 1 FROM matches m
+        WHERE m.id::text = chat_messages.match_id
+          AND m.tournament_id = chat_messages.tournament_id
+          AND (
+            -- viewer on team A or team B (roster or captain)
+            EXISTS (
+              SELECT 1 FROM teams ta
+              WHERE m.team_a_id IS NOT NULL
+                AND ta.id::text = m.team_a_id
+                AND (
+                  lower(ta.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(ta.roster, '[]'::jsonb)) r
+                    WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  )
+                )
+            )
+            OR
+            EXISTS (
+              SELECT 1 FROM teams tb
+              WHERE m.team_b_id IS NOT NULL
+                AND tb.id::text = m.team_b_id
+                AND (
+                  lower(tb.captain_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(tb.roster, '[]'::jsonb)) r
+                    WHERE lower(COALESCE(r->>'player_email', '')) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
+                  )
+                )
+            )
+          )
+      )
+    )
+    AND lower(chat_messages.sender_email) = lower(NULLIF(current_setting('app.auth_user_email', true), ''))
   )
 );
 
@@ -882,6 +1068,174 @@ CREATE POLICY gt_upd ON game_templates FOR UPDATE USING (
 );
 CREATE POLICY gt_del ON game_templates FOR DELETE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+-- ---------- game taxonomy (platform / genre / title) ----------
+ALTER TABLE game_platforms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_platforms FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gplat_sel ON game_platforms;
+DROP POLICY IF EXISTS gplat_ins ON game_platforms;
+DROP POLICY IF EXISTS gplat_upd ON game_platforms;
+DROP POLICY IF EXISTS gplat_del ON game_platforms;
+CREATE POLICY gplat_sel ON game_platforms FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR COALESCE(current_setting('app.allow_game_taxonomy_public_read', true), '') = '1'
+  OR COALESCE(current_setting('app.user_id', true), '') <> ''
+);
+CREATE POLICY gplat_ins ON game_platforms FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY gplat_upd ON game_platforms FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY gplat_del ON game_platforms FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+ALTER TABLE game_genres ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_genres FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ggen_sel ON game_genres;
+DROP POLICY IF EXISTS ggen_ins ON game_genres;
+DROP POLICY IF EXISTS ggen_upd ON game_genres;
+DROP POLICY IF EXISTS ggen_del ON game_genres;
+CREATE POLICY ggen_sel ON game_genres FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR COALESCE(current_setting('app.allow_game_taxonomy_public_read', true), '') = '1'
+  OR COALESCE(current_setting('app.user_id', true), '') <> ''
+);
+CREATE POLICY ggen_ins ON game_genres FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY ggen_upd ON game_genres FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY ggen_del ON game_genres FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+ALTER TABLE game_genre_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_genre_templates FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ggt_sel ON game_genre_templates;
+DROP POLICY IF EXISTS ggt_ins ON game_genre_templates;
+DROP POLICY IF EXISTS ggt_upd ON game_genre_templates;
+DROP POLICY IF EXISTS ggt_del ON game_genre_templates;
+CREATE POLICY ggt_sel ON game_genre_templates FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR COALESCE(current_setting('app.allow_game_taxonomy_public_read', true), '') = '1'
+  OR COALESCE(current_setting('app.user_id', true), '') <> ''
+);
+CREATE POLICY ggt_ins ON game_genre_templates FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY ggt_upd ON game_genre_templates FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY ggt_del ON game_genre_templates FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+ALTER TABLE game_titles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_titles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gti_sel ON game_titles;
+DROP POLICY IF EXISTS gti_ins ON game_titles;
+DROP POLICY IF EXISTS gti_upd ON game_titles;
+DROP POLICY IF EXISTS gti_del ON game_titles;
+CREATE POLICY gti_sel ON game_titles FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR source = 'seeded'
+  OR verified_at IS NOT NULL
+  OR (
+    created_by_tenant_id IS NOT NULL
+    AND created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  )
+  OR (
+    COALESCE(current_setting('app.allow_game_taxonomy_public_read', true), '') = '1'
+    AND (source = 'seeded' OR verified_at IS NOT NULL)
+  )
+);
+CREATE POLICY gti_ins ON game_titles FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    source = 'custom'
+    AND created_by_tenant_id IS NOT NULL
+    AND created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    AND COALESCE(current_setting('app.user_id', true), '') <> ''
+  )
+);
+CREATE POLICY gti_upd ON game_titles FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    source = 'custom'
+    AND created_by_tenant_id IS NOT NULL
+    AND created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    AND verified_at IS NULL
+    AND COALESCE(current_setting('app.user_id', true), '') <> ''
+  )
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    source = 'custom'
+    AND created_by_tenant_id IS NOT NULL
+    AND created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    AND verified_at IS NULL
+    AND COALESCE(current_setting('app.user_id', true), '') <> ''
+  )
+);
+CREATE POLICY gti_del ON game_titles FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+ALTER TABLE game_title_platforms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_title_platforms FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gtp_sel ON game_title_platforms;
+DROP POLICY IF EXISTS gtp_ins ON game_title_platforms;
+DROP POLICY IF EXISTS gtp_upd ON game_title_platforms;
+DROP POLICY IF EXISTS gtp_del ON game_title_platforms;
+CREATE POLICY gtp_sel ON game_title_platforms FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM game_titles t
+    WHERE t.id = game_title_platforms.title_id
+      AND (
+        COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+        OR t.source = 'seeded'
+        OR t.verified_at IS NOT NULL
+        OR (
+          t.created_by_tenant_id IS NOT NULL
+          AND t.created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+        )
+        OR (
+          COALESCE(current_setting('app.allow_game_taxonomy_public_read', true), '') = '1'
+          AND (t.source = 'seeded' OR t.verified_at IS NOT NULL)
+        )
+      )
+  )
+);
+CREATE POLICY gtp_ins ON game_title_platforms FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR EXISTS (
+    SELECT 1 FROM game_titles t
+    WHERE t.id = game_title_platforms.title_id
+      AND t.source = 'custom'
+      AND t.created_by_tenant_id IS NOT NULL
+      AND t.created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+      AND COALESCE(current_setting('app.user_id', true), '') <> ''
+  )
+);
+CREATE POLICY gtp_upd ON game_title_platforms FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY gtp_del ON game_title_platforms FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR EXISTS (
+    SELECT 1 FROM game_titles t
+    WHERE t.id = game_title_platforms.title_id
+      AND t.source = 'custom'
+      AND t.created_by_tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+      AND t.verified_at IS NULL
+      AND COALESCE(current_setting('app.user_id', true), '') <> ''
+  )
 );
 
 -- ---------- free_agents ----------
@@ -1112,5 +1466,135 @@ CREATE POLICY ua_upd ON user_accolades FOR UPDATE USING (
   OR COALESCE(current_setting('app.system_prize_worker', true), '') = 'true'
 );
 CREATE POLICY ua_del ON user_accolades FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+-- ---------- elo_entities ----------
+ALTER TABLE elo_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE elo_entities FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS ee_sel ON elo_entities;
+DROP POLICY IF EXISTS ee_ins ON elo_entities;
+DROP POLICY IF EXISTS ee_upd ON elo_entities;
+DROP POLICY IF EXISTS ee_del ON elo_entities;
+CREATE POLICY ee_sel ON elo_entities FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY ee_ins ON elo_entities FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY ee_upd ON elo_entities FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY ee_del ON elo_entities FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+-- ---------- team_elo_links ----------
+ALTER TABLE team_elo_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_elo_links FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tel_sel ON team_elo_links;
+DROP POLICY IF EXISTS tel_ins ON team_elo_links;
+DROP POLICY IF EXISTS tel_upd ON team_elo_links;
+DROP POLICY IF EXISTS tel_del ON team_elo_links;
+CREATE POLICY tel_sel ON team_elo_links FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR EXISTS (
+    SELECT 1 FROM teams tm
+    WHERE tm.id::text = team_elo_links.team_id::text
+      AND tm.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  )
+);
+CREATE POLICY tel_ins ON team_elo_links FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR EXISTS (
+    SELECT 1 FROM teams tm
+    WHERE tm.id::text = team_elo_links.team_id::text
+      AND tm.tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+  )
+);
+CREATE POLICY tel_upd ON team_elo_links FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY tel_del ON team_elo_links FOR DELETE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+
+-- ---------- team_ratings_history ----------
+ALTER TABLE team_ratings_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_ratings_history FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS trh_sel ON team_ratings_history;
+DROP POLICY IF EXISTS trh_ins ON team_ratings_history;
+CREATE POLICY trh_sel ON team_ratings_history FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY trh_ins ON team_ratings_history FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+
+-- ---------- tournament_archives ----------
+ALTER TABLE tournament_archives ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_archives FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tarc_sel ON tournament_archives;
+DROP POLICY IF EXISTS tarc_ins ON tournament_archives;
+CREATE POLICY tarc_sel ON tournament_archives FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY tarc_ins ON tournament_archives FOR INSERT WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+DROP POLICY IF EXISTS tarc_upd ON tournament_archives;
+CREATE POLICY tarc_upd ON tournament_archives FOR UPDATE USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+
+-- ---------- user_predictions ----------
+ALTER TABLE user_predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_predictions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS upred_sel ON user_predictions;
+DROP POLICY IF EXISTS upred_ins ON user_predictions;
+DROP POLICY IF EXISTS upred_upd ON user_predictions;
+DROP POLICY IF EXISTS upred_del ON user_predictions;
+CREATE POLICY upred_sel ON user_predictions FOR SELECT USING (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR user_id::text = NULLIF(current_setting('app.user_id', true), '')
+  OR (
+    tenant_id IS NOT NULL
+    AND tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM user_tenants ut
+      WHERE ut.user_id::text = NULLIF(current_setting('app.user_id', true), '')
+        AND ut.tenant_id = user_predictions.tenant_id
+        AND ut.role_in_tenant IN ('organizer', 'admin', 'staff')
+    )
+  )
+);
+CREATE POLICY upred_ins ON user_predictions FOR INSERT WITH CHECK (
+  user_id::text = NULLIF(current_setting('app.user_id', true), '')
+  AND tenant_id = NULLIF(current_setting('app.tenant_id', true), '')
+);
+CREATE POLICY upred_upd ON user_predictions FOR UPDATE USING (
+  user_id::text = NULLIF(current_setting('app.user_id', true), '')
+  OR COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+) WITH CHECK (
+  user_id::text = NULLIF(current_setting('app.user_id', true), '')
+  OR COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+);
+CREATE POLICY upred_del ON user_predictions FOR DELETE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
 );

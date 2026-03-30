@@ -323,7 +323,7 @@ export default function MatchLobby() {
       <div className="space-y-3">
         <h2 className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">Lobby chat</h2>
         <div className="rounded-2xl border border-white/10 overflow-hidden min-h-[280px]">
-          <MatchChat matchId={matchId} tenantId={tenantId} />
+          <MatchChat matchId={matchId} tournamentId={match?.tournament_id} />
         </div>
       </div>
     </div>

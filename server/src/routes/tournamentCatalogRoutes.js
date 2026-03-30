@@ -332,11 +332,16 @@ router.get('/team/:id', optionalAuth, async (req, res) => {
                 t.status AS tournament_status,
                 t.game_title,
                 t.prize_pool,
+                t.stream_url AS tournament_stream_url,
                 tn.name AS organizer_name,
-                tn.slug AS organizer_slug
+                tn.slug AS organizer_slug,
+                ee.elo AS global_elo,
+                ee.id AS elo_entity_id
          FROM teams tm
          INNER JOIN tournaments t ON t.id::text = tm.tournament_id::text
          LEFT JOIN tenants tn ON tn.id::text = t.tenant_id
+         LEFT JOIN team_elo_links tel ON tel.team_id::text = tm.id::text
+         LEFT JOIN elo_entities ee ON ee.id = tel.elo_entity_id
          WHERE tm.id::text = $1
            AND t.status IS NOT NULL
            AND t.status NOT IN ('draft', 'cancelled')`,
@@ -387,7 +392,19 @@ router.get('/team/:id', optionalAuth, async (req, res) => {
       );
       const careerPrize = Number(prizeR.rows[0]?.s || 0);
 
-      return { team, appearances, roster_stats: rosterStats.rows, career_prize_total: careerPrize };
+      let apex_tier = false;
+      if (team.elo_entity_id) {
+        const { rows: rk } = await client.query(
+          `SELECT 1 + COUNT(*)::int AS r
+           FROM elo_entities e
+           WHERE (e.wins + e.losses) > 0
+             AND e.elo > (SELECT elo FROM elo_entities WHERE id = $1::uuid)`,
+          [team.elo_entity_id]
+        );
+        apex_tier = Number(rk[0]?.r) <= 10;
+      }
+
+      return { team: { ...team, apex_tier }, appearances, roster_stats: rosterStats.rows, career_prize_total: careerPrize };
     });
 
     if (!body) return res.status(404).json({ error: 'Team not found' });
@@ -430,6 +447,173 @@ router.get('/tournaments-catalog', optionalAuth, handleCatalog);
 
 /** Alias — matches TRANSACTION_LAYER public tournaments naming. */
 router.get('/tournaments', optionalAuth, handleCatalog);
+
+/** Match Center: stream URL resolution for embed (Twitch / YouTube). */
+router.get('/match/:matchId/watch', optionalAuth, async (req, res) => {
+  const matchId = String(req.params.matchId || '').trim();
+  if (!matchId) return res.status(400).json({ error: 'matchId required' });
+  try {
+    const row = await runWithRls(pool, catalogReadContext(), async (client) => {
+      const { rows } = await client.query(
+        `SELECT m.*, t.name AS tournament_name, t.stream_url AS tournament_stream_url, t.status AS tournament_status
+         FROM matches m
+         INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
+         WHERE m.id::text = $1 AND t.status NOT IN ('draft', 'cancelled') LIMIT 1`,
+        [matchId]
+      );
+      return rows[0] || null;
+    });
+    if (!row) return res.status(404).json({ error: 'Match not found' });
+    const streamUrl = row.stream_url || row.tournament_stream_url || '';
+    res.json({ match: row, stream_url: streamUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Global Elo leaderboard (+ trend vs ~14d snapshot, Apex top 10). */
+router.get('/power-rankings', optionalAuth, async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const rankings = await runWithRls(pool, catalogReadContext(), async (client) => {
+      const { rows } = await client.query(
+        `WITH ranked AS (
+           SELECT e.*,
+             ROW_NUMBER() OVER (ORDER BY e.elo DESC, e.wins DESC, e.losses ASC) AS global_rank
+           FROM elo_entities e
+           WHERE (e.wins + e.losses) > 0
+         )
+         SELECT r.*,
+           (SELECT h.rating_after FROM team_ratings_history h
+            WHERE h.elo_entity_id = r.id AND h.created_date <= NOW() - INTERVAL '14 days'
+            ORDER BY h.created_date DESC LIMIT 1) AS elo_snapshot_14d
+         FROM ranked r
+         ORDER BY r.global_rank ASC
+         LIMIT $1`,
+        [limit]
+      );
+      return rows.map((row) => {
+        const apex = Number(row.global_rank) <= 10;
+        const prev = row.elo_snapshot_14d != null ? Number(row.elo_snapshot_14d) : null;
+        const elo = Number(row.elo);
+        let trend = 'flat';
+        if (prev != null && Number.isFinite(prev)) {
+          if (elo > prev + 5) trend = 'up';
+          else if (elo < prev - 5) trend = 'down';
+        }
+        return {
+          id: row.id,
+          display_name: row.display_name,
+          tag: row.tag,
+          tenant_id: row.tenant_id,
+          elo,
+          wins: row.wins,
+          losses: row.losses,
+          global_rank: Number(row.global_rank),
+          trend,
+          apex_tier: apex,
+        };
+      });
+    });
+    res.json({ rankings });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Cross-tenant career snapshot for recruitment card (public directory read). */
+router.get('/player-career', optionalAuth, async (req, res) => {
+  const email = String(req.query.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: 'email query required' });
+  try {
+    const body = await runWithRls(pool, catalogReadContext(), async (client) => {
+      const { rows: users } = await client.query(`SELECT id, full_name, email FROM users WHERE lower(email) = $1 LIMIT 1`, [
+        email,
+      ]);
+      const u = users[0];
+      if (!u) return { user: null };
+
+      const { rows: accolades } = await client.query(
+        `SELECT tournament_id, tournament_title, rank, badge_id, metadata, created_date
+         FROM user_accolades WHERE user_id = $1 ORDER BY created_date DESC LIMIT 80`,
+        [u.id]
+      );
+
+      const { rows: archiveRows } = await client.query(
+        `SELECT ta.tournament_id,
+                ta.archived_at,
+                COALESCE(ta.snapshot->'tournament'->>'name', 'Tournament') AS tournament_title
+         FROM tournament_archives ta
+         WHERE EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(COALESCE(ta.snapshot->'teams', '[]'::jsonb)) AS team
+           WHERE lower(COALESCE(team->>'captain_email', '')) = lower($1::text)
+              OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(COALESCE(team->'roster', '[]'::jsonb)) AS r
+                WHERE lower(COALESCE(r->>'player_email', '')) = lower($1::text)
+              )
+         )
+         ORDER BY ta.archived_at DESC
+         LIMIT 24`,
+        [email]
+      );
+      const accoladeTids = new Set(accolades.map((a) => String(a.tournament_id)));
+      const archive_milestones = archiveRows
+        .filter((r) => !accoladeTids.has(String(r.tournament_id)))
+        .map((r) => ({
+          tournament_id: r.tournament_id,
+          tournament_title: r.tournament_title,
+          archived_at: r.archived_at,
+        }));
+
+      const { rows: statAgg } = await client.query(
+        `SELECT COUNT(*)::int AS played,
+            SUM(CASE WHEN COALESCE(won, false) THEN 1 ELSE 0 END)::int AS wins
+         FROM player_stats WHERE lower(player_email) = lower($1)`,
+        [email]
+      );
+
+      const { rows: byGame } = await client.query(
+        `SELECT COALESCE(game_title, 'Unknown') AS game_title, COUNT(*)::int AS cnt
+         FROM player_stats WHERE lower(player_email) = lower($1)
+         GROUP BY COALESCE(game_title, 'Unknown') ORDER BY cnt DESC LIMIT 8`,
+        [email]
+      );
+
+      const { rows: earn } = await client.query(
+        `SELECT COALESCE(SUM(amount), 0)::numeric AS s
+         FROM payment_ledger
+         WHERE beneficiary_user_id = $1::uuid AND type = 'prize_payout' AND status = 'completed'`,
+        [u.id]
+      );
+
+      const played = Number(statAgg[0]?.played || 0);
+      const wins = Number(statAgg[0]?.wins || 0);
+      const winRate = played > 0 ? Math.round((wins / played) * 1000) / 10 : 0;
+      const mostPlayed = byGame[0]?.game_title || '—';
+
+      return {
+        user: { id: u.id, email: u.email, full_name: u.full_name },
+        timeline: accolades,
+        archive_milestones,
+        stats: {
+          total_career_earnings: Number(earn[0]?.s || 0),
+          most_played_game: mostPlayed,
+          win_rate_pct: winRate,
+          matches_tracked: played,
+          wins,
+        },
+      };
+    });
+    if (!body.user) return res.status(404).json({ error: 'User not found' });
+    res.json(body);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
 
 export async function invalidateTournamentCatalogCache() {
   catalogCache.clear();

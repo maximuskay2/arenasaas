@@ -321,6 +321,29 @@ export const arena = {
     },
   },
 
+  /** Community / war-room feed (auth required; namespace via scope + optional X-Tenant-ID). */
+  community: {
+    listPosts: (params = {}, opts = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request('GET', `/api/community/posts${q ? `?${q}` : ''}`, { headers: opts.headers || {} });
+    },
+    createPost: (body, opts = {}) => request('POST', '/api/community/posts', { body, headers: opts.headers || {} }),
+    deletePost: (id) => request('DELETE', `/api/community/posts/${encodeURIComponent(id)}`),
+    pinPost: (id, pinned) => request('PATCH', `/api/community/posts/${encodeURIComponent(id)}/pin`, { body: { pinned } }),
+    likePost: (id) => request('POST', `/api/community/posts/${encodeURIComponent(id)}/like`),
+    unlikePost: (id) => request('DELETE', `/api/community/posts/${encodeURIComponent(id)}/like`),
+    listComments: (postId) => request('GET', `/api/community/posts/${encodeURIComponent(postId)}/comments`),
+    createComment: (postId, body) =>
+      request('POST', `/api/community/posts/${encodeURIComponent(postId)}/comments`, { body }),
+    deleteComment: (id) => request('DELETE', `/api/community/comments/${encodeURIComponent(id)}`),
+    shadowban: (body) => request('POST', '/api/community/admin/shadowban', { body }),
+    unshadowban: (body) => request('DELETE', '/api/community/admin/shadowban', { body }),
+  },
+
   /** Self-serve organizer org creation (server uses platform RLS + user_tenants + entitlements). */
   tenantRegistration: {
     async complete(body) {
@@ -354,10 +377,39 @@ export const arena = {
     tournamentTeams: (id) => request('GET', `/api/public/tournament/${encodeURIComponent(id)}/teams`),
     /** Matches for a catalog-visible tournament (anonymous-friendly). */
     tournamentMatches: (id) => request('GET', `/api/public/tournament/${encodeURIComponent(id)}/matches`),
+
+    /** Community feed read-only (anonymous-friendly). */
+    communityPosts: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request("GET", `/api/public/community/posts${q ? `?${q}` : ""}`);
+    },
+    communityComments: (postId) =>
+      request("GET", `/api/public/community/posts/${encodeURIComponent(postId)}/comments`),
     /** Standings + player_stats slice for Performance tab. */
     tournamentPerformance: (id) => request('GET', `/api/public/tournament/${encodeURIComponent(id)}/performance`),
     tournamentLeagueStandings: (id) =>
       request('GET', `/api/public/tournament/${encodeURIComponent(id)}/league-standings`),
+
+    gameTaxonomyPlatforms: () => request('GET', '/api/public/game-taxonomy/platforms'),
+    gameTaxonomyGenreTemplates: () => request('GET', '/api/public/game-taxonomy/genre-templates'),
+    gameTaxonomyGenres: (platformId) => {
+      const qs = platformId ? `?platform_id=${encodeURIComponent(platformId)}` : '';
+      return request('GET', `/api/public/game-taxonomy/genres${qs}`);
+    },
+    gameTaxonomyTitles: (params = {}) => {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+      });
+      const q = qs.toString();
+      return request('GET', `/api/public/game-taxonomy/titles${q ? `?${q}` : ''}`);
+    },
+    gameTaxonomyDefaults: (titleId) =>
+      request('GET', `/api/public/game-taxonomy/defaults/${encodeURIComponent(titleId)}`),
     /** Team landing page (roster KDA, tag appearances, prize totals). */
     teamProfile: (id) => request('GET', `/api/public/team/${encodeURIComponent(id)}`),
     tenantByHost: (host) => request('GET', `/api/public/tenant-by-host?host=${encodeURIComponent(host)}`),
@@ -381,6 +433,16 @@ export const arena = {
     },
     /** Stats strip + recent / upcoming / live + top orgs, teams, games (catalog visibility). */
     discoveryDashboard: () => request('GET', '/api/public/discovery/dashboard'),
+    matchWatchMeta: (matchId) =>
+      request('GET', `/api/public/match/${encodeURIComponent(matchId)}/watch`),
+    powerRankings: (params = {}) => {
+      const q = new URLSearchParams();
+      if (params.limit != null) q.set('limit', String(params.limit));
+      const s = q.toString();
+      return request('GET', `/api/public/power-rankings${s ? `?${s}` : ''}`);
+    },
+    playerCareer: (email) =>
+      request('GET', `/api/public/player-career?email=${encodeURIComponent(email)}`),
   },
 
   /** Atomic join + transaction endpoints */
@@ -415,6 +477,19 @@ export const arena = {
       }),
     finalizeStatus: (tournamentId) =>
       request('GET', `/api/match-engine/tournaments/${encodeURIComponent(tournamentId)}/finalize-status`),
+    getPickem: (tournamentId, opts = {}) => {
+      const tid = opts.tenantId != null && String(opts.tenantId).trim() ? String(opts.tenantId).trim() : '';
+      const headers = tid ? { 'X-Tenant-ID': tid } : {};
+      return request('GET', `/api/match-engine/tournaments/${encodeURIComponent(tournamentId)}/pickem`, { headers });
+    },
+    putPickem: (tournamentId, body, opts = {}) => {
+      const tid = opts.tenantId != null && String(opts.tenantId).trim() ? String(opts.tenantId).trim() : '';
+      const headers = tid ? { 'X-Tenant-ID': tid } : {};
+      return request('PUT', `/api/match-engine/tournaments/${encodeURIComponent(tournamentId)}/pickem`, {
+        body,
+        headers,
+      });
+    },
   },
 
   payments: {
@@ -443,6 +518,10 @@ export const arena = {
     initialize: (body) => request('POST', '/api/flutterwave/initialize', { body }),
   },
 
+  gameTaxonomy: {
+    createCustom: (body) => request('POST', '/api/v1/game-taxonomy/custom-titles', { body }),
+  },
+
   /** Platform admin (`role: admin`) — bypasses API maintenance gate */
   system: {
     emailStatus: () => request('GET', '/api/system/email-status'),
@@ -461,6 +540,13 @@ export const arena = {
     fcmNotificationEnqueue: (body) => request('POST', '/api/system/notification-jobs/fcm', { body }),
     fcmNotificationDepth: () => request('GET', '/api/system/notification-jobs/fcm/depth'),
     fcmNotificationDrain: (body) => request('POST', '/api/system/notification-jobs/fcm/drain', { body }),
+    customGameTitlesPending: () => request('GET', '/api/system/custom-game-titles'),
+    verifyCustomGameTitle: (id, body) =>
+      request('PATCH', `/api/system/custom-game-titles/${encodeURIComponent(id)}/verify`, { body }),
+    gameGenreTemplatesAdmin: () => request('GET', '/api/system/game-genre-templates'),
+    gameGenreTemplateCreate: (body) => request('POST', '/api/system/game-genre-templates', { body }),
+    gameGenreTemplatePatch: (id, body) =>
+      request('PATCH', `/api/system/game-genre-templates/${encodeURIComponent(id)}`, { body }),
   },
 
   integrations: {

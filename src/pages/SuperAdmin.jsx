@@ -19,7 +19,6 @@ import {
   Building2,
   Cpu,
   CreditCard,
-  DollarSign,
   Gavel,
   Landmark,
   Layers,

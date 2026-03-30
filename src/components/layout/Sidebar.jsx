@@ -3,7 +3,7 @@ import { getEffectiveHubMode, isLeagueHostUser, setHubPreference } from "@/lib/r
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LayoutDashboard, Trophy, Swords, Users, Gamepad2,
-  Settings, ScrollText, ChevronLeft, ChevronRight, Shield, Wallet, BarChart2, Compass, UserSearch, Star, ClipboardList, Sun, Moon, LogOut, Clock, Megaphone, Gavel
+  Settings, ScrollText, ChevronLeft, ChevronRight, Shield, Wallet, BarChart2, Compass, UserSearch, Star, ClipboardList, Sun, Moon, LogOut, Clock, Megaphone, Gavel, MessageSquare, Flame
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTenant } from "@/hooks/useTenant";
@@ -29,6 +29,8 @@ export default function Sidebar() {
   const organizerNavItems = [
     { path: "/", icon: LayoutDashboard, label: "Dashboard" },
     { path: "/tournaments", icon: Compass, label: "Discover" },
+    { path: "/rankings", icon: Flame, label: "Power ranks" },
+    { path: "/community", icon: MessageSquare, label: "Community" },
     { path: "/league/tournaments", icon: Trophy, label: "My tournaments" },
     { path: "/free-agents", icon: UserSearch, label: "Free Agents" },
     { path: "/sponsorships", icon: Star, label: "Sponsorships" },
@@ -52,6 +54,8 @@ export default function Sidebar() {
     { path: "/dashboard/wallet", icon: Wallet, label: "Wallet" },
     { path: "/dashboard/settings", icon: Settings, label: "Hub settings" },
     { path: "/tournaments", icon: Compass, label: "Discover" },
+    { path: "/rankings", icon: Flame, label: "Power ranks" },
+    { path: "/community", icon: MessageSquare, label: "Community" },
     { path: "/matches", icon: Swords, label: "All matches" },
     { path: "/check-in", icon: Clock, label: "Check-in" },
   ];

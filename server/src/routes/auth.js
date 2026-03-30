@@ -256,7 +256,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const row = await runWithRls(pool, rlsContextFromRequest(req), async (client) => {
       const r = await client.query(
-        `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, created_date FROM users WHERE id = $1`,
+        `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, profile_xp, created_date FROM users WHERE id = $1`,
         [req.user.sub]
       );
       return r.rows[0] || null;
@@ -539,6 +539,7 @@ function formatUser(row, opts = {}) {
     mfa_enabled: !!row.mfa_enabled,
     kyc_cleared: !!row.kyc_cleared,
     achievements: row.achievements ?? [],
+    profile_xp: Number(row.profile_xp ?? 0),
     created_date: row.created_date,
     tenant_memberships,
     /** Primary tenant for organizer dashboard (first membership). */

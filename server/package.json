@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test src/lib/prizeCalculator.test.js src/lib/matchBracketServer.test.js src/lib/prizePayoutKyc.test.js src/lib/discoveryDashboard.test.js",
+    "test": "node --test src/lib/prizeCalculator.test.js src/lib/matchBracketServer.test.js src/lib/prizePayoutKyc.test.js src/lib/discoveryDashboard.test.js src/lib/communityPermissions.test.js src/lib/elo.test.js",
     "stress:payout-ledger": "node scripts/payout-ledger-idempotency-stress.js",
     "migrate": "node src/migrate.js",
     "seed": "node src/seed-cli.js",

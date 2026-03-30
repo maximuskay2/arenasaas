@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { joinMatchLobbyRoom, leaveMatchLobbyRoom, subscribeMatchLobbyChat } from "@/lib/realtimeClient";
 
-export default function MatchChat({ matchId, tenantId }) {
+export default function MatchChat({ matchId, tournamentId }) {
   const [message, setMessage] = useState("");
   const [user, setUser] = useState(null);
   const bottomRef = useRef(null);
@@ -19,17 +20,20 @@ export default function MatchChat({ matchId, tenantId }) {
   const { data: messages = [] } = useQuery({
     queryKey: ["chat", matchId],
     queryFn: () => maxikay.entities.ChatMessage.filter({ match_id: matchId }, "created_date", 100),
-    refetchInterval: 5000,
+    enabled: !!matchId,
   });
 
-  // Real-time subscription
   useEffect(() => {
-    const unsub = maxikay.entities.ChatMessage.subscribe((event) => {
-      if (event.data?.match_id === matchId) {
-        queryClient.invalidateQueries({ queryKey: ["chat", matchId] });
-      }
+    if (!matchId) return;
+    joinMatchLobbyRoom(matchId);
+    return () => leaveMatchLobbyRoom(matchId);
+  }, [matchId]);
+
+  useEffect(() => {
+    if (!matchId) return () => {};
+    return subscribeMatchLobbyChat(matchId, () => {
+      queryClient.invalidateQueries({ queryKey: ["chat", matchId] });
     });
-    return unsub;
   }, [matchId, queryClient]);
 
   useEffect(() => {
@@ -37,31 +41,30 @@ export default function MatchChat({ matchId, tenantId }) {
   }, [messages]);
 
   const sendMutation = useMutation({
-    mutationFn: (msg) => maxikay.entities.ChatMessage.create({
-      match_id: matchId,
-      message: msg,
-      sender_email: user?.email || "anonymous",
-      sender_name: user?.full_name || user?.email?.split("@")[0] || "Anonymous",
-      role: "player",
-      ...(tenantId ? { tenant_id: tenantId } : {}),
-    }),
+    mutationFn: (msg) =>
+      maxikay.entities.ChatMessage.create({
+        match_id: matchId,
+        tournament_id: tournamentId,
+        // Backward-compatible: some deployments may still use `message`/`role`.
+        content: msg,
+        message: msg,
+        sender_email: user?.email || "anonymous",
+        sender_name: user?.full_name || user?.email?.split("@")[0] || "Anonymous",
+        role: "player",
+        is_system: false,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chat", matchId] });
     },
   });
 
   const handleSend = () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !tournamentId) return;
     sendMutation.mutate(message.trim());
     setMessage("");
   };
 
-  const roleColors = {
-    referee: "text-accent",
-    organizer: "text-primary",
-    player: "text-foreground",
-    spectator: "text-muted-foreground",
-  };
+  const canSend = Boolean(message.trim()) && Boolean(tournamentId) && !sendMutation.isPending;
 
   return (
     <div className="glass rounded-xl overflow-hidden">
@@ -89,13 +92,13 @@ export default function MatchChat({ matchId, tenantId }) {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <span className={`text-xs font-semibold ${roleColors[msg.role] || "text-foreground"}`}>
-                  {msg.sender_name || msg.sender_email}
-                  {msg.role !== "player" && (
-                    <span className="ml-1 text-[10px] bg-secondary px-1.5 py-0.5 rounded uppercase">{msg.role}</span>
+                <span className={`text-xs font-semibold ${msg.is_system ? "text-muted-foreground" : "text-foreground"}`}>
+                  {msg.sender_name || msg.sender_email || "Anonymous"}
+                  {msg.is_system && (
+                    <span className="ml-1 text-[10px] bg-secondary px-1.5 py-0.5 rounded uppercase">SYSTEM</span>
                   )}
                 </span>
-                <p className="text-xs text-foreground/90 mt-0.5 break-words">{msg.message}</p>
+                <p className="text-xs text-foreground/90 mt-0.5 break-words">{msg.content ?? msg.message}</p>
               </div>
             </motion.div>
           ))}
@@ -116,7 +119,7 @@ export default function MatchChat({ matchId, tenantId }) {
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={!message.trim() || sendMutation.isPending}
+            disabled={!canSend}
             className="h-8 w-8 shrink-0"
           >
             <Send className="w-3.5 h-3.5" />

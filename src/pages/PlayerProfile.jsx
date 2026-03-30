@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Trophy, TrendingUp, Swords, User, Target, Skull, Zap, Share2, Copy, Star, Gamepad2, Edit3, Check, X } from "lucide-react";
+import { ArrowLeft, Trophy, TrendingUp, Swords, User, Target, Zap, Share2, Copy, Star, Gamepad2, Edit3, Check, X, Briefcase, DollarSign, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
 import StatusBadge from "../components/shared/StatusBadge";
@@ -153,11 +153,33 @@ export default function PlayerProfile() {
     queryFn: () => maxikay.auth.me(),
   });
 
+  const { data: career } = useQuery({
+    queryKey: ["player-career-public", email],
+    queryFn: () => maxikay.public.playerCareer(email).catch(() => null),
+    enabled: !!email,
+    retry: false,
+  });
+
   const { data: fanMVPVotes = [] } = useQuery({
     queryKey: ["fan-mvp-votes", email],
     queryFn: () => maxikay.entities.FanVote.filter({ vote_type: "player", target_email: email }),
     enabled: !!email,
   });
+
+  const mergedCareerTimeline = useMemo(() => {
+    if (!career) return [];
+    const acc = (career.timeline || []).map((ev) => ({
+      kind: "accolade",
+      sort: new Date(ev.created_date || 0).getTime(),
+      ev,
+    }));
+    const arch = (career.archive_milestones || []).map((ev) => ({
+      kind: "archive",
+      sort: new Date(ev.archived_at || 0).getTime(),
+      ev,
+    }));
+    return [...acc, ...arch].sort((a, b) => b.sort - a.sort).slice(0, 28);
+  }, [career]);
 
   const analytics = useMemo(() => {
     const wins = playerMatches.filter((m) => teamIds.includes(m.winner_id)).length;
@@ -296,6 +318,78 @@ export default function PlayerProfile() {
         <StatCard label="KDA Ratio" value={analytics.kda} icon={Zap} color="text-yellow-400" sub={`${analytics.avgDeaths} avg deaths`} />
         <StatCard label="Matches" value={playerMatches.length} icon={Swords} color="text-foreground" sub={`${playerTeams.length} teams`} />
       </div>
+
+      {career?.stats && (
+        <div className="glass rounded-xl p-5 border border-primary/15 space-y-4">
+          <h3 className="text-xs font-display uppercase tracking-wider text-primary flex items-center gap-2">
+            <Briefcase className="w-3.5 h-3.5" /> Career résumé (platform)
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard
+              label="Career earnings"
+              value={`$${Number(career.stats.total_career_earnings || 0).toLocaleString()}`}
+              icon={DollarSign}
+              color="text-emerald-400"
+              sub="Prize payouts"
+            />
+            <StatCard
+              label="Win rate (tracked)"
+              value={`${career.stats.win_rate_pct}%`}
+              icon={TrendingUp}
+              color="text-green-400"
+              sub={`${career.stats.wins}W / ${career.stats.matches_tracked} maps`}
+            />
+            <StatCard
+              label="Most played"
+              value={career.stats.most_played_game}
+              icon={Gamepad2}
+              color="text-foreground"
+              sub="By stat rows"
+            />
+            <StatCard
+              label="Profile XP"
+              value={currentUser?.profile_xp ?? "—"}
+              icon={Star}
+              color="text-yellow-400"
+              sub="Pick'Em + future rewards"
+            />
+          </div>
+        </div>
+      )}
+
+      {mergedCareerTimeline.length > 0 && (
+        <div className="glass rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-display uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <History className="w-3.5 h-3.5" /> Career timeline
+          </h3>
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Placements from accolades and finalized events archived for recruitment (no hard-delete of concluded tournaments).
+          </p>
+          <div className="relative pl-6 border-l border-border/60 space-y-5">
+            {mergedCareerTimeline.map((item, idx) =>
+              item.kind === "accolade" ? (
+                <div key={`${item.ev.tournament_id}-acc-${idx}`} className="relative">
+                  <span className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-primary ring-4 ring-background" />
+                  <p className="text-sm font-semibold text-foreground">{item.ev.tournament_title || "Tournament"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Rank #{item.ev.rank} · {item.ev.badge_id?.replace(/_/g, " ")}
+                    {item.ev.created_date ? ` · ${moment(item.ev.created_date).format("MMM D, YYYY")}` : ""}
+                  </p>
+                </div>
+              ) : (
+                <div key={`${item.ev.tournament_id}-arc-${idx}`} className="relative">
+                  <span className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full bg-cyan-500/80 ring-4 ring-background" />
+                  <p className="text-sm font-semibold text-foreground">{item.ev.tournament_title || "Tournament"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Competitive archive sealed
+                    {item.ev.archived_at ? ` · ${moment(item.ev.archived_at).format("MMM D, YYYY")}` : ""}
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Activity Chart */}
       {analytics.activityChart.length > 1 && (

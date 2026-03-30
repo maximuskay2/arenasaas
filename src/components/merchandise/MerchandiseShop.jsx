@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
-import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
+import { ShoppingCart, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 

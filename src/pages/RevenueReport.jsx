@@ -3,7 +3,7 @@ import { maxikay } from "@/api/maxikayClient";
 import { useTenant } from "@/hooks/useTenant";
 import { useMemo } from "react";
 import { DollarSign, Trophy, Percent, TrendingUp, ArrowLeft } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import PageHeader from "../components/shared/PageHeader";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
 import { Button } from "@/components/ui/button";

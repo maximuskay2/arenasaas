@@ -250,6 +250,88 @@ CREATE TABLE IF NOT EXISTS game_templates (
 );
 
 -- ============================================================
+-- GAME TAXONOMY (platform → genre → title)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS game_platforms (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  icon_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS game_genres (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  default_roster_size INTEGER NOT NULL DEFAULT 5,
+  icon_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Scoring/rules templates (FPS/MOBA vs BR vs fighting vs CCG/RTS vs team sports vs ladders).
+CREATE TABLE IF NOT EXISTS game_genre_templates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  rules_summary TEXT NOT NULL DEFAULT '',
+  default_team_roster_size INTEGER NOT NULL DEFAULT 5,
+  min_team_size INTEGER,
+  max_team_size INTEGER,
+  suggested_format TEXT NOT NULL DEFAULT 'single_elimination'
+    CHECK (suggested_format IN ('single_elimination', 'double_elimination', 'round_robin', 'swiss')),
+  competition_scoring_type TEXT NOT NULL DEFAULT 'bracket'
+    CHECK (competition_scoring_type IN ('bracket', 'points')),
+  match_scoring_mode TEXT NOT NULL DEFAULT 'best_of_1'
+    CHECK (match_scoring_mode IN ('best_of_1', 'best_of_3', 'best_of_5', 'points')),
+  swiss_recommended BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS game_titles (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  genre_id UUID NOT NULL REFERENCES game_genres(id) ON DELETE RESTRICT,
+  genre_template_id UUID REFERENCES game_genre_templates(id) ON DELETE SET NULL,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'seeded' CHECK (source IN ('seeded', 'custom')),
+  banner_url TEXT,
+  icon_url TEXT,
+  suggested_format TEXT NOT NULL DEFAULT 'single_elimination'
+    CHECK (suggested_format IN ('single_elimination', 'double_elimination', 'round_robin', 'swiss')),
+  competition_scoring_type TEXT NOT NULL DEFAULT 'bracket'
+    CHECK (competition_scoring_type IN ('bracket', 'points')),
+  match_scoring_mode TEXT NOT NULL DEFAULT 'best_of_1'
+    CHECK (match_scoring_mode IN ('best_of_1', 'best_of_3', 'best_of_5', 'points')),
+  default_team_roster_size INTEGER NOT NULL,
+  require_in_game_id BOOLEAN NOT NULL DEFAULT FALSE,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_by_user_id UUID,
+  created_by_tenant_id TEXT,
+  verified_at TIMESTAMPTZ,
+  verified_by UUID,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS game_title_platforms (
+  title_id UUID NOT NULL REFERENCES game_titles(id) ON DELETE CASCADE,
+  platform_id UUID NOT NULL REFERENCES game_platforms(id) ON DELETE CASCADE,
+  PRIMARY KEY (title_id, platform_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_titles_genre ON game_titles(genre_id);
+CREATE INDEX IF NOT EXISTS idx_game_titles_name_lower ON game_titles (lower(name));
+CREATE INDEX IF NOT EXISTS idx_game_titles_source_verified ON game_titles (source, verified_at);
+CREATE INDEX IF NOT EXISTS idx_title_platforms_platform ON game_title_platforms(platform_id);
+
+-- ============================================================
 -- TOURNAMENTS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tournaments (
@@ -258,6 +340,10 @@ CREATE TABLE IF NOT EXISTS tournaments (
   name TEXT NOT NULL,
   game_template_id TEXT,
   game_title TEXT,
+  game_title_id UUID REFERENCES game_titles(id) ON DELETE SET NULL,
+  genre_template_id UUID REFERENCES game_genre_templates(id) ON DELETE SET NULL,
+  team_roster_size INTEGER,
+  competition_scoring_type TEXT CHECK (competition_scoring_type IS NULL OR competition_scoring_type IN ('bracket', 'points')),
   format TEXT NOT NULL CHECK (format IN ('single_elimination', 'double_elimination', 'round_robin', 'swiss')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'registration_open', 'registration_closed', 'in_progress', 'completed', 'cancelled')),
   description TEXT,
@@ -301,7 +387,7 @@ CREATE TABLE IF NOT EXISTS teams (
   status TEXT DEFAULT 'registered' CHECK (status IN ('registered', 'checked_in', 'eliminated', 'winner')),
   wins INTEGER DEFAULT 0,
   losses INTEGER DEFAULT 0,
-  elo NUMERIC(8, 2) DEFAULT 1000,
+  elo NUMERIC(8, 2) DEFAULT 1200,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT
@@ -489,6 +575,66 @@ CREATE TABLE IF NOT EXISTS feed_comments (
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT
 );
+
+-- ============================================================
+-- COMMUNITY POSTS (platform global / tenant-scoped war-room)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS community_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id TEXT,
+  author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL DEFAULT '',
+  post_type TEXT NOT NULL DEFAULT 'strategy'
+    CHECK (post_type IN ('announcement', 'strategy', 'recruitment')),
+  media_url TEXT,
+  pinned BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at TIMESTAMPTZ,
+  like_count INTEGER NOT NULL DEFAULT 0,
+  comment_count INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_posts_tenant_live
+  ON community_posts (tenant_id, created_date DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_community_posts_global_live
+  ON community_posts (created_date DESC)
+  WHERE deleted_at IS NULL AND tenant_id IS NULL;
+
+CREATE TABLE IF NOT EXISTS community_post_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_comments_post ON community_post_comments (post_id)
+  WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS community_post_likes (
+  post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_shadowbans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id TEXT,
+  scope TEXT NOT NULL DEFAULT 'tenant' CHECK (scope IN ('global', 'tenant')),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reason TEXT,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_community_shadowban_unique
+  ON community_shadowbans (user_id, scope, COALESCE(tenant_id, ''));
 
 -- ============================================================
 -- CHAT MESSAGES
@@ -686,11 +832,86 @@ CREATE TABLE IF NOT EXISTS users (
   kyc_cleared BOOLEAN NOT NULL DEFAULT FALSE,
   -- Denormalized mirror of placement/participation accolades (filled by trigger on user_accolades).
   achievements JSONB NOT NULL DEFAULT '[]'::jsonb,
+  profile_xp INTEGER NOT NULL DEFAULT 0,
   mfa_secret TEXT,
   mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ============================================================
+-- GLOBAL ELO / PRESTIGE (cross-tournament team entities)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS elo_entities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  tag TEXT NOT NULL DEFAULT '',
+  elo NUMERIC(10, 2) NOT NULL DEFAULT 1200,
+  wins INTEGER NOT NULL DEFAULT 0,
+  losses INTEGER NOT NULL DEFAULT 0,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS team_elo_links (
+  team_id TEXT PRIMARY KEY,
+  elo_entity_id UUID NOT NULL REFERENCES elo_entities(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_elo_entities_tenant ON elo_entities(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_elo_entities_elo ON elo_entities(elo DESC);
+
+CREATE TABLE IF NOT EXISTS team_ratings_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  elo_entity_id UUID NOT NULL REFERENCES elo_entities(id) ON DELETE CASCADE,
+  match_id TEXT NOT NULL,
+  tournament_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  rating_before NUMERIC(10, 2) NOT NULL,
+  rating_after NUMERIC(10, 2) NOT NULL,
+  delta NUMERIC(10, 2) NOT NULL,
+  k_factor INTEGER NOT NULL,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (match_id, elo_entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_ratings_history_entity ON team_ratings_history(elo_entity_id);
+CREATE INDEX IF NOT EXISTS idx_team_ratings_history_match ON team_ratings_history(match_id);
+
+-- ============================================================
+-- TOURNAMENT ARCHIVES (immutable snapshot at finalize)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tournament_archives (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id TEXT NOT NULL UNIQUE,
+  tenant_id TEXT NOT NULL,
+  snapshot JSONB NOT NULL,
+  archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournament_archives_tenant ON tournament_archives(tenant_id);
+
+-- ============================================================
+-- PICK'EM (bracket predictions)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_predictions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tournament_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  bracket_picks JSONB NOT NULL DEFAULT '{}'::jsonb,
+  locked BOOLEAN NOT NULL DEFAULT FALSE,
+  pickem_score INTEGER,
+  correct_picks INTEGER,
+  total_picks_scored INTEGER,
+  pickem_settled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, tournament_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_predictions_tournament ON user_predictions(tournament_id);
 
 -- User ↔ tenant membership (§4.4); complements global users.role
 CREATE TABLE IF NOT EXISTS user_tenants (
@@ -752,6 +973,7 @@ CREATE INDEX IF NOT EXISTS idx_feed_posts_tournament ON feed_posts(tournament_id
 CREATE INDEX IF NOT EXISTS idx_fan_votes_match ON fan_votes(match_id, voter_email);
 CREATE INDEX IF NOT EXISTS idx_otp_records_email ON otp_records(email, used);
 CREATE INDEX IF NOT EXISTS idx_merch_orders_buyer ON merchandise_orders(buyer_email);
+CREATE INDEX IF NOT EXISTS idx_user_predictions_user ON user_predictions(user_id);
 
 -- ============================================================
 -- USER ACCOLADES → users.achievements mirror (SECURITY DEFINER)
@@ -804,11 +1026,12 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'tenants','tenant_configs','tenant_entitlements','tenant_wallets',
-    'withdrawal_requests','payment_ledger','user_wallets','game_templates','tournaments',
+    'withdrawal_requests','payment_ledger','user_wallets','game_templates','game_platforms','game_genres','game_genre_templates','game_titles','tournaments',
     'tournament_league_standings','teams','matches','match_reports','reschedule_requests','match_highlights',
-    'player_stats','free_agents','feed_posts','feed_comments','chat_messages',
+    'player_stats','free_agents','feed_posts','feed_comments','community_posts','chat_messages',
     'fan_votes','sponsors','prize_payments','merchandise_items',
-    'merchandise_orders','notifications','audit_logs','otp_records','platform_config'
+    'merchandise_orders','notifications','audit_logs','otp_records','platform_config',
+    'elo_entities','user_predictions','tournament_archives'
   ]
   LOOP
     EXECUTE format(

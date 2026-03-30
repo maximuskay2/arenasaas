@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/AuthContext";
 import { maxikay } from "@/api/maxikayClient";
-import { Trophy, Swords, Users, Wallet, Bell, ChevronRight, Gamepad2, Radio, Sparkles } from "lucide-react";
+import { Trophy, Swords, Users, Bell, ChevronRight, Gamepad2, Radio, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 

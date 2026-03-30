@@ -20,6 +20,7 @@
     "test:g1": "node scripts/g1-cross-tenant.mjs",
     "test:match-lock": "node scripts/match-optimistic-lock.mjs",
     "test:integration": "npm run test:g1 && npm run test:match-lock",
+    "test:media-url": "node --test src/lib/matchResultsMediaUrl.test.js",
     "playwright:install": "playwright install chromium",
     "test:e2e": "playwright test"
   },
@@ -79,6 +80,7 @@
     "react-hot-toast": "^2.6.0",
     "react-leaflet": "^4.2.1",
     "react-markdown": "^9.0.1",
+    "react-player": "^2.16.0",
     "react-quill": "^2.0.0",
     "react-resizable-panels": "^2.1.7",
     "react-router-dom": "^6.26.0",

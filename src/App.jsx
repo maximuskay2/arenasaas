@@ -13,6 +13,8 @@ import TournamentDetail from './pages/TournamentDetail';
 import TournamentLobby from './pages/TournamentLobby';
 import Matches from './pages/Matches';
 import MatchDetail from './pages/MatchDetail';
+import MatchLive from './pages/MatchLive';
+import PowerRankings from './pages/PowerRankings';
 import MatchLobby from './pages/MatchLobby';
 import Teams from './pages/Teams';
 import GameTemplates from './pages/GameTemplates';
@@ -58,6 +60,8 @@ import PlayerHubHome from './pages/player/PlayerHubHome';
 import PlayerHubMatches from './pages/player/PlayerHubMatches';
 import PlayerHubTeams from './pages/player/PlayerHubTeams';
 import PlayerHubSettings from './pages/player/PlayerHubSettings';
+import CommunityHub from './pages/CommunityHub';
+import PublicShell from './components/layout/PublicShell';
 import { applyTenantBranding } from './lib/whiteLabelManager';
 import { useEffect } from 'react';
 import PlatformAdminGate from './components/entry/PlatformAdminGate';
@@ -85,7 +89,10 @@ function OrganizerAppRoutes() {
         <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
         <Route path="/matches" element={<Matches />} />
         <Route path="/matches/:matchId/lobby" element={<MatchLobby />} />
+        <Route path="/matches/:matchId/live" element={<MatchLive />} />
+        <Route path="/match/:matchId/live" element={<MatchLive />} />
         <Route path="/matches/:id" element={<MatchDetail />} />
+        <Route path="/rankings" element={<PowerRankings />} />
         <Route path="/teams" element={<RequireLeagueHost><Teams /></RequireLeagueHost>} />
         <Route path="/games" element={<RequireLeagueHost><GameTemplates /></RequireLeagueHost>} />
         <Route path="/league/disputes" element={<RequireLeagueHost><DisputeInbox /></RequireLeagueHost>} />
@@ -108,6 +115,7 @@ function OrganizerAppRoutes() {
         <Route path="/dev-todos" element={<RequireLeagueHost><DevTodos /></RequireLeagueHost>} />
         <Route path="/check-in" element={<PlayerCheckin />} />
         <Route path="/players/:username" element={<PlayerProfilePublic />} />
+        <Route path="/community" element={<CommunityHub />} />
         <Route path="*" element={<PageNotFound />} />
       </Route>
     </Routes>
@@ -168,6 +176,9 @@ const AuthenticatedApp = () => {
           <Route path="/tournaments/:id" element={<TournamentDetail />} />
           <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
           <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
+          <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
+          <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
+          <Route path="/match/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route element={<AppLayout />}>
@@ -176,6 +187,7 @@ const AuthenticatedApp = () => {
             <Route path="/dashboard/teams" element={<PlayerHubTeams />} />
             <Route path="/dashboard/wallet" element={<Wallet />} />
             <Route path="/dashboard/settings" element={<PlayerHubSettings />} />
+            <Route path="/community" element={<CommunityHub />} />
           </Route>
           <Route
             path="/central-station"
@@ -215,6 +227,9 @@ const AuthenticatedApp = () => {
         <Route path="/tournaments/:id" element={<TournamentDetail />} />
         <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
         <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
+        <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
+        <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
+        <Route path="/match/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route element={<AppLayout />}>
@@ -223,6 +238,7 @@ const AuthenticatedApp = () => {
           <Route path="/dashboard/teams" element={<PlayerHubTeams />} />
           <Route path="/dashboard/wallet" element={<Wallet />} />
           <Route path="/dashboard/settings" element={<PlayerHubSettings />} />
+          <Route path="/community" element={<CommunityHub />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

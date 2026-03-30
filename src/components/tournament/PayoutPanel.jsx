@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { determinePlacements, calculatePayouts, recordPayouts, DEFAULT_PRIZE_SPLIT } from "@/lib/payouts";
+import { determinePlacements, calculatePayouts, recordPayouts } from "@/lib/payouts";
 import { DollarSign, Trophy, Medal, Award, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useTenant } from "@/hooks/useTenant";

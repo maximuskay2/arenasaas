@@ -40,6 +40,8 @@ export default function PrizeDistribution({ tournament, matches, teams, tenantId
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [references, setReferences] = useState({});
+  // Track chosen payout method per placement without calling hooks inside `.map()`.
+  const [methods, setMethods] = useState({});
 
   const { data: payments = [] } = useQuery({
     queryKey: ["prize-payments", tournament.id],
@@ -124,7 +126,7 @@ export default function PrizeDistribution({ tournament, matches, teams, tenantId
               const team = placement[place];
               const amount = Math.round(prizePool * pct / 100);
               const payment = paymentsByPlace[place];
-              const [method, setMethod] = useState("paypal");
+              const method = methods[place] || "paypal";
 
               if (!team) return (
                 <div key={place} className={`rounded-xl p-4 border ${border} ${bg} opacity-50`}>
@@ -168,7 +170,10 @@ export default function PrizeDistribution({ tournament, matches, teams, tenantId
                   ) : (
                     <div className="space-y-2">
                       <div className="flex gap-2">
-                        <Select value={method} onValueChange={setMethod}>
+                        <Select
+                          value={method}
+                          onValueChange={(v) => setMethods((prev) => ({ ...prev, [place]: v }))}
+                        >
                           <SelectTrigger className="h-7 text-xs bg-secondary/50 w-32"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="paypal">PayPal</SelectItem>

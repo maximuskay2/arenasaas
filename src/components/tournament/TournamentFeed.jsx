@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
-import { Image, Video, Send, Pin, Heart, Trophy, Zap, MessageSquare, ThumbsUp, Flame, PartyPopper, ChevronDown, ChevronUp } from "lucide-react";
+import { Image, Video, Send, Pin, Trophy, Zap, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
 import FeedComments from "./FeedComments";
 import { toast } from "sonner";
 import moment from "moment";

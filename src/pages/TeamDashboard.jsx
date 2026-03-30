@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
-import { ArrowLeft, Users, Plus, Mail, Trash2, Shield, BarChart2, Swords, Crown } from "lucide-react";
+import { ArrowLeft, Users, Plus, Mail, Trash2, BarChart2, Swords, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

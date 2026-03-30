@@ -3,9 +3,10 @@ import { clientSafeErrorMessage } from '../clientSafeError.js';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { runWithRls, rlsContextFromRequest } from '../rls/transaction.js';
-import { emitMatchUpdated } from '../realtime.js';
+import { emitMatchUpdated, emitMatchCenterFeed } from '../realtime.js';
 import { applyForfeitTransition } from '../forfeitApply.js';
 import { recomputeLeagueStandings } from '../lib/leagueStandings.js';
+import { applyMatchEloUpdate } from '../lib/matchEloHook.js';
 
 const router = express.Router();
 router.use(express.json());
@@ -32,8 +33,8 @@ router.post('/forfeit', requireAuth, async (req, res) => {
     const expectedV = Number(ev);
     if (Number.isNaN(expectedV)) return res.status(400).json({ error: 'expected_version must be a number' });
 
-    const row = await runWithRls(pool, { ...rlsContextFromRequest(req), tenantId }, async (client) =>
-      applyForfeitTransition(client, {
+    const row = await runWithRls(pool, { ...rlsContextFromRequest(req), tenantId }, async (client) => {
+      const out = await applyForfeitTransition(client, {
         idempotencyKey: idemKey,
         matchId,
         tenantId,
@@ -41,8 +42,31 @@ router.post('/forfeit', requireAuth, async (req, res) => {
         fromStatus,
         newStatus,
         patch,
-      })
-    );
+      });
+      if (out?.match) {
+        const m = out.match;
+        const terminal = ['completed', 'forfeited', 'no_show'].includes(String(m.status || ''));
+        if (terminal && m.winner_id && m.team_a_id && m.team_b_id) {
+          try {
+            await applyMatchEloUpdate(client, m);
+          } catch (e) {
+            console.error('[forfeit] elo', e);
+          }
+        }
+        if (terminal && m.tournament_id) {
+          try {
+            const { rows: tr } = await client.query(
+              `SELECT format FROM tournaments WHERE id::text = $1 AND tenant_id = $2 LIMIT 1`,
+              [String(m.tournament_id), tenantId]
+            );
+            await recomputeLeagueStandings(client, String(m.tournament_id), tenantId, String(tr[0]?.format || ''));
+          } catch (e) {
+            console.error('[forfeit] league standings', e);
+          }
+        }
+      }
+      return out;
+    });
 
     if (row?.duplicate) return res.json({ ok: true, duplicate: true });
     if (row?.conflict) return res.status(409).json({ error: 'Match state changed — retry', code: 'optimistic_lock' });
@@ -50,18 +74,13 @@ router.post('/forfeit', requireAuth, async (req, res) => {
       emitMatchUpdated(row.match);
       const m = row.match;
       const terminal = ['completed', 'forfeited', 'no_show'].includes(String(m.status || ''));
-      if (terminal && m.tournament_id) {
-        try {
-          await runWithRls(pool, { ...rlsContextFromRequest(req), tenantId }, async (client) => {
-            const { rows: tr } = await client.query(
-              `SELECT format FROM tournaments WHERE id::text = $1 AND tenant_id = $2 LIMIT 1`,
-              [String(m.tournament_id), tenantId]
-            );
-            await recomputeLeagueStandings(client, String(m.tournament_id), tenantId, String(tr[0]?.format || ''));
-          });
-        } catch (e) {
-          console.error('[forfeit] league standings', e);
-        }
+      if (terminal && m.winner_id) {
+        emitMatchCenterFeed(String(m.id), {
+          type: 'result',
+          headline: `${m.winner_name || 'Winner'} wins`,
+          body: `Match resolved (${String(m.status)})`,
+          matchId: String(m.id),
+        });
       }
       return res.json({ ok: true, match: row.match });
     }

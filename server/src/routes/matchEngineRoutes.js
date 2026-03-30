@@ -4,8 +4,11 @@ import { clientSafeErrorMessage } from '../clientSafeError.js';
 import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { runWithRls, rlsContextFromRequest } from '../rls/transaction.js';
-import { emitMatchUpdated } from '../realtime.js';
+import { emitMatchUpdated, emitMatchCenterFeed } from '../realtime.js';
 import { advanceWinnerToNextMatch } from '../lib/matchBracketServer.js';
+import { applyMatchEloUpdate } from '../lib/matchEloHook.js';
+import { insertTournamentArchive } from '../lib/tournamentArchive.js';
+import { scorePickEmPredictions } from '../lib/pickemScore.js';
 import {
   buildPrizeSummary,
   derivePlacements,
@@ -28,6 +31,14 @@ async function refreshLeagueStandingsIfNeeded(client, matchRow) {
     [tourId, ten]
   );
   await recomputeLeagueStandings(client, tourId, ten, String(rows[0]?.format || ''));
+}
+
+async function applyEloForCompletedMatch(client, completed) {
+  try {
+    await applyMatchEloUpdate(client, completed);
+  } catch (e) {
+    console.error('[match-engine] elo update', e);
+  }
 }
 
 function tenantHeader(req) {
@@ -304,8 +315,9 @@ router.post('/matches/:matchId/report-result', requireAuth, async (req, res) => 
       if (next) emitMatchUpdated(next);
       emitMatchUpdated(completed);
       await refreshLeagueStandingsIfNeeded(client, completed);
+      await applyEloForCompletedMatch(client, completed);
 
-      return { ok: true, match: completed, resolved: true };
+      return { ok: true, match: completed, resolved: true, advanced_to: next || null };
     });
 
     if (result.error) return res.status(result.status || 400).json({ error: result.error });
@@ -313,6 +325,29 @@ router.post('/matches/:matchId/report-result', requireAuth, async (req, res) => 
       void notifyTenantStaffScoreDisputed(pool, tenantId, result.match).catch((err) =>
         console.error('[match-engine] staff dispute notify', err)
       );
+    }
+    if (result.match?.status === 'completed' && result.resolved) {
+      const c = result.match;
+      emitMatchCenterFeed(String(c.id), {
+        type: 'score',
+        headline: `${c.winner_name || 'Winner'} takes the map`,
+        body: `Final score ${c.score_a}-${c.score_b}`,
+        matchId: String(c.id),
+      });
+      if (result.advanced_to) {
+        emitMatchCenterFeed(String(c.id), {
+          type: 'bracket',
+          headline: `${c.winner_name || 'Winner'} advances`,
+          body: 'Bracket slot updated',
+        });
+        const nx = result.advanced_to;
+        emitMatchCenterFeed(String(nx.id), {
+          type: 'bracket',
+          headline: 'Next slot filled',
+          body: `${nx.team_a_name || 'TBD'} vs ${nx.team_b_name || 'TBD'}`,
+          matchId: String(nx.id),
+        });
+      }
     }
     res.json(result);
   } catch (e) {
@@ -401,10 +436,34 @@ router.patch('/matches/:matchId/resolve-dispute', requireAuth, async (req, res) 
       if (next) emitMatchUpdated(next);
       emitMatchUpdated(completed);
       await refreshLeagueStandingsIfNeeded(client, completed);
-      return { ok: true, match: completed };
+      await applyEloForCompletedMatch(client, completed);
+      return { ok: true, match: completed, advanced_to: next || null };
     });
 
     if (result.error) return res.status(result.status || 400).json({ error: result.error });
+    if (result.match?.status === 'completed') {
+      const c = result.match;
+      emitMatchCenterFeed(String(c.id), {
+        type: 'dispute_resolved',
+        headline: `${c.winner_name || 'Winner'} confirmed`,
+        body: `Score ${c.score_a}-${c.score_b}`,
+        matchId: String(c.id),
+      });
+      if (result.advanced_to) {
+        emitMatchCenterFeed(String(c.id), {
+          type: 'bracket',
+          headline: `${c.winner_name || 'Winner'} advances`,
+          body: 'Bracket slot updated',
+        });
+        const nx = result.advanced_to;
+        emitMatchCenterFeed(String(nx.id), {
+          type: 'bracket',
+          headline: 'Next slot filled',
+          body: `${nx.team_a_name || 'TBD'} vs ${nx.team_b_name || 'TBD'}`,
+          matchId: String(nx.id),
+        });
+      }
+    }
     res.json(result);
   } catch (e) {
     console.error(e);
@@ -491,6 +550,11 @@ router.post('/tournaments/:id/finalize', requireAuth, async (req, res) => {
            WHERE id::text = $1`,
           [tourId]
         );
+        try {
+          await insertTournamentArchive(client, tourId, tenantId);
+        } catch (e) {
+          console.error('[finalize] archive', e);
+        }
         return {
           ok: true,
           tournament_id: tourId,
@@ -527,6 +591,12 @@ router.post('/tournaments/:id/finalize', requireAuth, async (req, res) => {
         [tourId]
       );
 
+      try {
+        await insertTournamentArchive(client, tourId, tenantId);
+      } catch (e) {
+        console.error('[finalize] archive', e);
+      }
+
       return {
         ok: true,
         tournament_id: tourId,
@@ -536,6 +606,15 @@ router.post('/tournaments/:id/finalize', requireAuth, async (req, res) => {
     });
 
     if (result.error) return res.status(result.status || 400).json({ error: result.error });
+
+    try {
+      await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+        await scorePickEmPredictions(client, tourId, tenantId);
+      });
+    } catch (e) {
+      console.error('[finalize] pickem settle', e);
+    }
+
     if (result.payout_job === 'queued') {
       await enqueuePrizePayoutJob({ tournament_id: tourId, tenant_id: tenantId });
     }
@@ -564,6 +643,99 @@ router.get('/tournaments/:id/finalize-status', requireAuth, async (req, res) => 
     });
     if (!row) return res.status(404).json({ error: 'Not found' });
     res.json(row);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Pick'Em: open while status is registration_closed (before in_progress). */
+router.get('/tournaments/:id/pickem', requireAuth, async (req, res) => {
+  const tenantId = tenantHeader(req);
+  if (!tenantId) return res.status(400).json({ error: 'X-Tenant-ID required' });
+  const tourId = String(req.params.id || '');
+  try {
+    const out = await runWithRls(pool, { ...rlsContextFromRequest(req), tenantId }, async (client) => {
+      const { rows: trows } = await client.query(
+        `SELECT id, name, status FROM tournaments WHERE id::text = $1 AND tenant_id = $2 LIMIT 1`,
+        [tourId, tenantId]
+      );
+      const tournament = trows[0];
+      if (!tournament) return { notfound: true };
+      const windowOpen = String(tournament.status) === 'registration_closed';
+      const { rows: matches } = await client.query(
+        `SELECT id, round, match_number, team_a_id, team_b_id, team_a_name, team_b_name, winner_id, status
+         FROM matches WHERE tournament_id::text = $1 ORDER BY round ASC, match_number ASC`,
+        [tourId]
+      );
+      const { rows: pred } = await client.query(
+        `SELECT * FROM user_predictions WHERE tournament_id::text = $1 AND user_id = $2::uuid LIMIT 1`,
+        [tourId, req.user.sub]
+      );
+      const { rows: leaders } = await client.query(
+        `SELECT p.user_id, p.pickem_score, p.correct_picks, p.pickem_settled
+         FROM user_predictions p
+         WHERE p.tournament_id::text = $1 AND p.tenant_id = $2
+         ORDER BY p.pickem_score DESC NULLS LAST, p.updated_date ASC
+         LIMIT 25`,
+        [tourId, tenantId]
+      );
+      return { tournament, windowOpen, matches, prediction: pred[0] || null, leaderboard: leaders };
+    });
+    if (out.notfound) return res.status(404).json({ error: 'Tournament not found' });
+    res.json(out);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+router.put('/tournaments/:id/pickem', requireAuth, async (req, res) => {
+  const tenantId = tenantHeader(req);
+  if (!tenantId) return res.status(400).json({ error: 'X-Tenant-ID required' });
+  const tourId = String(req.params.id || '');
+  const raw = req.body?.bracket_picks;
+  const bracket_picks = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  if (!bracket_picks) return res.status(400).json({ error: 'bracket_picks object required (matchId -> teamId)' });
+  try {
+    const out = await runWithRls(pool, { ...rlsContextFromRequest(req), tenantId, userId: String(req.user.sub) }, async (client) => {
+      const { rows: trows } = await client.query(
+        `SELECT id, status FROM tournaments WHERE id::text = $1 AND tenant_id = $2 LIMIT 1`,
+        [tourId, tenantId]
+      );
+      const tournament = trows[0];
+      if (!tournament) return { notfound: true };
+      if (String(tournament.status) !== 'registration_closed') {
+        return { bad: 'Pick’Em is only open when registration is closed and play has not started', status: 400 };
+      }
+      const { rows: existing } = await client.query(
+        `SELECT id, locked FROM user_predictions WHERE tournament_id::text = $1 AND user_id = $2::uuid LIMIT 1`,
+        [tourId, req.user.sub]
+      );
+      if (existing[0]?.locked) return { bad: 'Predictions are locked', status: 400 };
+
+      let row;
+      if (existing[0]?.id) {
+        const up = await client.query(
+          `UPDATE user_predictions SET bracket_picks = $1::jsonb, updated_date = NOW()
+           WHERE id = $2::uuid AND locked = FALSE RETURNING *`,
+          [JSON.stringify(bracket_picks), existing[0].id]
+        );
+        if (!up.rows[0]) return { bad: 'Predictions are locked', status: 400 };
+        row = up.rows[0];
+      } else {
+        const ins = await client.query(
+          `INSERT INTO user_predictions (user_id, tournament_id, tenant_id, bracket_picks)
+           VALUES ($1::uuid, $2, $3, $4::jsonb) RETURNING *`,
+          [req.user.sub, tourId, tenantId, JSON.stringify(bracket_picks)]
+        );
+        row = ins.rows[0];
+      }
+      return { prediction: row };
+    });
+    if (out.notfound) return res.status(404).json({ error: 'Tournament not found' });
+    if (out.bad) return res.status(out.status || 400).json({ error: out.bad });
+    res.json(out);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: clientSafeErrorMessage(e) });

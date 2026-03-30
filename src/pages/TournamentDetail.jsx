@@ -16,7 +16,6 @@ import {
 
 // Components
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
@@ -29,13 +28,12 @@ import BracketEditor from "../components/tournament/BracketEditor";
 import TournamentJoinModal from "@/components/tournament/TournamentJoinModal";
 import InsightsNode from "@/components/insights/InsightsNode";
 import TournamentViewershipPanel from "@/components/insights/TournamentViewershipPanel";
+import TournamentPickEm from "@/components/tournament/TournamentPickEm";
 import { formatPrizeCardLine, formatPrizeDetailLines } from "@/lib/prizeDisplay";
 
 // Logic Engines (Preserved)
 import { generateSingleElimination, generateDoubleElimination, generateRoundRobin, generateSwiss } from "../lib/bracketEngines";
 import { linkBracketMatches } from "../lib/bracketAdvancement";
-import { sendDiscordNotification } from "../lib/discord";
-import { matchScheduledNotif, tournamentStageChangedNotif } from "../lib/notifications";
 
 export default function TournamentDetail() {
   const { id } = useParams();
@@ -527,6 +525,7 @@ export default function TournamentDetail() {
         <TabsList className="bg-white/5 border border-white/10 h-14 p-1 rounded-2xl">
           <TabTrigger value="bracket">Tournament Bracket</TabTrigger>
           <TabTrigger value="teams">Roster ({teams.length})</TabTrigger>
+          <TabTrigger value="pickem">Pick &apos;Em</TabTrigger>
           <TabTrigger value="live" className="gap-2">
             {tournament.status === "in_progress" && <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />} Live Broadcast
           </TabTrigger>
@@ -561,6 +560,10 @@ export default function TournamentDetail() {
 
         <TabsContent value="teams">
            <TeamsList teams={teams} tournamentId={id} tournament={tournament} />
+        </TabsContent>
+
+        <TabsContent value="pickem" className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/10">
+          <TournamentPickEm tournamentId={id} tournamentTenantId={tournament?.tenant_id} />
         </TabsContent>
 
         <TabsContent value="live" className="space-y-8 p-8 rounded-[2rem] bg-white/5 border border-white/10">

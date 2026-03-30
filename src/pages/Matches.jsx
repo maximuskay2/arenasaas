@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { maxikay } from "@/api/maxikayClient";
 import { useTenant } from "@/hooks/useTenant";
-import { Swords, Search } from "lucide-react";
+import { Swords, Search, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -107,6 +107,14 @@ export default function Matches() {
                   </div>
                 </Link>
                 <div className="flex sm:flex-col justify-end gap-2 border-t sm:border-t-0 sm:border-l border-border/40 pt-3 sm:pt-0 sm:pl-3">
+                  {(match.status === "in_progress" || match.status === "check_in_open" || match.status === "checked_in") && (
+                    <Link
+                      to={`/matches/${match.id}/live`}
+                      className="inline-flex items-center justify-center gap-1 text-[10px] font-display font-bold uppercase tracking-wider text-red-400 hover:text-red-300 text-center sm:text-left"
+                    >
+                      <Radio className="w-3 h-3 shrink-0" /> Live
+                    </Link>
+                  )}
                   <Link
                     to={`/matches/${match.id}/lobby`}
                     className="text-[10px] font-display font-bold uppercase tracking-wider text-primary hover:underline text-center sm:text-left"

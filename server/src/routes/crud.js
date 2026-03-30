@@ -6,7 +6,7 @@ import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import { runWithRls, rlsContextFromRequest } from '../rls/transaction.js';
 import { assertCanCreateTournament, decrementOneShotCredit, EntitlementError } from '../entitlements.js';
 import { assertTenantActiveForWrites } from '../tenantStatusGuard.js';
-import { emitMatchUpdated, emitMatchReady, emitLiveTickerForMatch } from '../realtime.js';
+import { emitMatchUpdated, emitMatchReady, emitLiveTickerForMatch, emitMatchLobbyMessage } from '../realtime.js';
 import { assertPrizeStructureSaveRules } from '../lib/prizeCalculator.js';
 import { assertPrizeWithdrawalKycAllowed } from '../lib/prizePayoutKyc.js';
 
@@ -325,6 +325,12 @@ router.post('/:entity', optionalAuth, async (req, res) => {
             await decrementOneShotCredit(client, tid);
           }
         }
+
+        // Emit match-scoped lobby chat so only users in the match lobby UI
+        // get the realtime message push.
+        if (table === 'chat_messages' && inserted?.match_id) {
+          emitMatchLobbyMessage(inserted);
+        }
         return inserted;
       }
     );
@@ -448,6 +454,17 @@ router.patch('/:entity/:id', requireAuth, async (req, res) => {
     );
     if (!row) return res.status(404).json({ error: 'Not found' });
     if (table === 'matches') notifyMatchSockets(prevStatus, row);
+    if (table === 'tournaments' && String(row.status) === 'in_progress') {
+      const tid = String(row.tenant_id || tenantId || '');
+      if (tid) {
+        void runWithRls(pool, { ...rlsContextFromRequest(req), tenantId: tid }, (client) =>
+          client.query(
+            `UPDATE user_predictions SET locked = TRUE, updated_date = NOW() WHERE tournament_id::text = $1 AND tenant_id = $2`,
+            [String(row.id), tid]
+          )
+        ).catch((err) => console.error('[pickem lock]', err));
+      }
+    }
     if (table === 'tenant_configs' && body.payout_settings !== undefined) {
       auditTenantPayoutSettingsPatch(req, table, row, body);
     }
@@ -468,6 +485,18 @@ router.delete('/:entity/:id', requireAuth, async (req, res) => {
     const tenantId = await tenantIdForCrud(req);
     if (req.user && req.user.role !== 'admin' && tenantId) {
       await assertTenantActiveForWrites(tenantId, req.user.role);
+    }
+    if (table === 'tournaments') {
+      const blocked = await runWithRls(pool, { ...baseCrudContext(req, table), tenantId }, async (client) => {
+        const { rows } = await client.query(`SELECT status FROM tournaments WHERE id = $1 LIMIT 1`, [req.params.id]);
+        return rows[0]?.status === 'completed';
+      });
+      if (blocked) {
+        return res.status(400).json({
+          error: 'Completed tournaments are archived and cannot be deleted',
+          code: 'tournament_archived',
+        });
+      }
     }
     const deleted = await runWithRls(
       pool,

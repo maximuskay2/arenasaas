@@ -12,6 +12,7 @@
  * - app.allow_bootstrap_tenant
  * - app.otp_session_email
  * - app.allow_game_template_read
+ * - app.allow_game_taxonomy_public_read
  * - app.allow_public_directory_read
  * - app.public_tenant_slug
  * - app.allow_public_platform_config_read
@@ -37,6 +38,7 @@ export async function runWithRls(pool, context, fn) {
     allowPublicPlatformConfigRead: false,
     /** Insert notifications for arbitrary tenant staff emails (dispute alerts, etc.). */
     allowInternalNotification: false,
+    allowGameTaxonomyPublicRead: false,
     ...context,
   };
 
@@ -81,6 +83,9 @@ export async function runWithRls(pool, context, fn) {
     await client.query(`SELECT set_config('app.allow_internal_notification', $1, true)`, [
       ctx.allowInternalNotification ? '1' : '',
     ]);
+    await client.query(`SELECT set_config('app.allow_game_taxonomy_public_read', $1, true)`, [
+      ctx.allowGameTaxonomyPublicRead ? '1' : '',
+    ]);
 
     const out = await fn(client);
     await client.query('COMMIT');
@@ -119,6 +124,7 @@ export function rlsContextFromRequest(req, opts = {}) {
     userId: user?.sub || '',
     userEmail: user?.email || '',
     allowGameTemplateRead: !!user || publicCatalog,
+    allowGameTaxonomyPublicRead: !!user || publicCatalog,
     allowPublicDirectoryRead: !!user || publicCatalog,
   };
 }

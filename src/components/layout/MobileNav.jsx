@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
-  LayoutDashboard, Trophy, Swords, Users, Menu, X, Shield, UserSearch, Compass, Wallet, BarChart2, ClipboardList, LogOut
+  LayoutDashboard, Trophy, Swords, Users, Menu, X, Shield, Wallet, LogOut
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/lib/AuthContext";
@@ -22,6 +22,7 @@ const playerMobileItems = [
 ];
 
 const HOST_MENU_EXTRA = [
+  { path: "/community", label: "💬 Community" },
   { path: "/free-agents", label: "🔍 Free Agents" },
   { path: "/sponsorships", label: "⭐ Sponsorships" },
   { path: "/team-management", label: "🛡️ Team Management" },
@@ -36,6 +37,7 @@ const HOST_MENU_EXTRA = [
 ];
 
 const PLAYER_MENU_EXTRA = [
+  { path: "/community", label: "💬 Community" },
   { path: "/players/profile", label: "👤 Player profile" },
   { path: "/dashboard/settings", label: "⚙️ Hub settings" },
   { path: "/check-in", label: "✅ Check-in" },
@@ -117,6 +119,7 @@ export default function MobileNav() {
               )}
               {[
                 { path: "/tournaments", label: "🧭 Discover tournaments" },
+                { path: "/rankings", label: "🔥 Power ranks" },
                 ...(host ? HOST_MENU_EXTRA : PLAYER_MENU_EXTRA),
                 { path: "/wallet", label: "💰 Wallet" },
                 ...(host ? [{ path: "/players/profile", label: "👤 Player profile" }] : []),

@@ -27,12 +27,17 @@ import {
   Mail,
   CreditCard,
   Sparkles,
+  Gamepad2,
+  Plus,
 } from "lucide-react";
 import { setImpersonatedTenantId, getImpersonatedTenantId } from "@/hooks/useTenant";
 import { toast } from "sonner";
 import { overrideTenantBranding } from "@/lib/whiteLabelManager";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -190,6 +195,55 @@ export default function SystemAdmin() {
   const [disputeNotes, setDisputeNotes] = useState("");
   const [activeDispute, setActiveDispute] = useState(null);
   const [brandingOpen, setBrandingOpen] = useState(false);
+  /** game_title_id -> { banner_url?, icon_url? } for verify form */
+  const [customGameAssets, setCustomGameAssets] = useState({});
+
+  const emptyGenreTemplateForm = () => ({
+    slug: "",
+    name: "",
+    rules_summary: "",
+    default_team_roster_size: 5,
+    min_team_size: "",
+    max_team_size: "",
+    suggested_format: "single_elimination",
+    competition_scoring_type: "bracket",
+    match_scoring_mode: "best_of_1",
+    swiss_recommended: false,
+    sort_order: 100,
+  });
+  const [genreTemplateForm, setGenreTemplateForm] = useState(() => emptyGenreTemplateForm());
+  const [genreTemplateDialog, setGenreTemplateDialog] = useState(null);
+
+  const { data: systemGenreTemplates = [], isLoading: systemGenreTemplatesLoading } = useQuery({
+    queryKey: ["system-game-genre-templates"],
+    queryFn: async () => {
+      const r = await maxikay.system.gameGenreTemplatesAdmin();
+      return Array.isArray(r.templates) ? r.templates : [];
+    },
+  });
+
+  const createGenreTemplateMutation = useMutation({
+    mutationFn: (body) => maxikay.system.gameGenreTemplateCreate(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["system-game-genre-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["game-taxonomy-genre-templates"] });
+      setGenreTemplateDialog(null);
+      setGenreTemplateForm(emptyGenreTemplateForm());
+      toast.success("Scoring template created.");
+    },
+    onError: (e) => toast.error(e?.message || "Create failed"),
+  });
+
+  const patchGenreTemplateMutation = useMutation({
+    mutationFn: ({ id, body }) => maxikay.system.gameGenreTemplatePatch(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["system-game-genre-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["game-taxonomy-genre-templates"] });
+      setGenreTemplateDialog(null);
+      toast.success("Template saved.");
+    },
+    onError: (e) => toast.error(e?.message || "Save failed"),
+  });
 
   const { data: health, isError: healthError } = useQuery({
     queryKey: ["system-admin-health"],
@@ -266,6 +320,24 @@ export default function SystemAdmin() {
   const { data: platformConfigRows = [] } = useQuery({
     queryKey: ["platform-config-admin"],
     queryFn: () => maxikay.entities.PlatformConfig.list(),
+  });
+
+  const { data: customGamesPending = { titles: [] }, isLoading: customGamesLoading } = useQuery({
+    queryKey: ["system-custom-games"],
+    queryFn: () => maxikay.system.customGameTitlesPending(),
+  });
+
+  const verifyCustomGameMutation = useMutation({
+    mutationFn: ({ id, banner_url, icon_url }) =>
+      maxikay.system.verifyCustomGameTitle(id, {
+        ...(banner_url != null ? { banner_url } : {}),
+        ...(icon_url != null ? { icon_url } : {}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["system-custom-games"] });
+      toast.success("Game title verified — now visible catalog-wide.");
+    },
+    onError: (e) => toast.error(e?.message || "Verify failed"),
   });
 
   const { data: pulseReplica } = useQuery({
@@ -717,6 +789,9 @@ export default function SystemAdmin() {
               </TabsTrigger>
               <TabsTrigger value="financial" className={CS_TAB_TRIGGER}>
                 <Landmark className="w-3.5 h-3.5 shrink-0 opacity-80" /> Financial
+              </TabsTrigger>
+              <TabsTrigger value="games" className={CS_TAB_TRIGGER}>
+                <Gamepad2 className="w-3.5 h-3.5 shrink-0 opacity-80" /> Games
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1985,7 +2060,402 @@ export default function SystemAdmin() {
             </div>
           </div>
         </TabsContent>
+
+        <TabsContent value="games" className="space-y-4">
+          <div className={`${CS_PANEL} p-4 md:p-5`}>
+            <Tabs defaultValue="scoring-templates" className="w-full space-y-5">
+              <TabsList className="inline-flex h-auto w-full flex-wrap gap-1 justify-start rounded-xl border border-border/60 bg-secondary/40 p-1.5">
+                <TabsTrigger
+                  value="scoring-templates"
+                  className="gap-2 rounded-lg px-3 py-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                >
+                  <Layers className="w-3.5 h-3.5 shrink-0 opacity-90" /> Scoring templates
+                </TabsTrigger>
+                <TabsTrigger
+                  value="custom-titles"
+                  className="gap-2 rounded-lg px-3 py-2 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                >
+                  <Gamepad2 className="w-3.5 h-3.5 shrink-0 opacity-90" /> Pending custom titles
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="scoring-templates" className="space-y-4 mt-4 focus-visible:outline-none">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-border/50 pb-4">
+                  <div>
+                    <h3 className="font-display font-semibold flex items-center gap-2 text-base">
+                      <Layers className="w-4 h-4 text-primary" /> Genre scoring templates
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1.5 max-w-2xl leading-relaxed">
+                      These profiles drive tournament defaults (bracket vs points, roster sizing, Swiss hints). Editing a template
+                      updates what organizers see in the create wizard; existing tournaments keep their stored copy. The{" "}
+                      <span className="font-mono text-foreground/90">tournaments.genre_template_id</span> column snapshots the template at
+                      creation for reporting joins.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="shrink-0 gap-1.5"
+                    onClick={() => {
+                      setGenreTemplateForm(emptyGenreTemplateForm());
+                      setGenreTemplateDialog({ mode: "create" });
+                    }}
+                  >
+                    <Plus className="w-4 h-4" /> New template
+                  </Button>
+                </div>
+
+                {systemGenreTemplatesLoading ? (
+                  <LoadingSpinner />
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-border/50">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/60 bg-secondary/30 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <th className="p-3 font-semibold">Order</th>
+                          <th className="p-3 font-semibold">Slug</th>
+                          <th className="p-3 font-semibold">Name</th>
+                          <th className="p-3 font-semibold">Roster</th>
+                          <th className="p-3 font-semibold">Format</th>
+                          <th className="p-3 font-semibold">Competition</th>
+                          <th className="p-3 font-semibold">Match</th>
+                          <th className="p-3 font-semibold">Swiss</th>
+                          <th className="p-3 font-semibold w-24" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {systemGenreTemplates.map((row) => (
+                          <tr key={row.id} className="border-b border-border/40 hover:bg-secondary/20">
+                            <td className="p-3 tabular-nums text-muted-foreground">{row.sort_order}</td>
+                            <td className="p-3 font-mono text-xs text-primary/90">{row.slug}</td>
+                            <td className="p-3 font-medium">{row.name}</td>
+                            <td className="p-3 tabular-nums">
+                              {row.default_team_roster_size}
+                              {row.min_team_size != null || row.max_team_size != null ? (
+                                <span className="text-muted-foreground text-xs block">
+                                  min {row.min_team_size ?? "—"} / max {row.max_team_size ?? "—"}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="p-3 text-xs">{row.suggested_format?.replace(/_/g, " ")}</td>
+                            <td className="p-3 text-xs">{row.competition_scoring_type}</td>
+                            <td className="p-3 text-xs">{row.match_scoring_mode?.replace(/_/g, " ")}</td>
+                            <td className="p-3">{row.swiss_recommended ? "Yes" : "—"}</td>
+                            <td className="p-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs"
+                                onClick={() => {
+                                  setGenreTemplateForm({
+                                    slug: row.slug,
+                                    name: row.name,
+                                    rules_summary: row.rules_summary || "",
+                                    default_team_roster_size: row.default_team_roster_size,
+                                    min_team_size: row.min_team_size ?? "",
+                                    max_team_size: row.max_team_size ?? "",
+                                    suggested_format: row.suggested_format,
+                                    competition_scoring_type: row.competition_scoring_type,
+                                    match_scoring_mode: row.match_scoring_mode,
+                                    swiss_recommended: !!row.swiss_recommended,
+                                    sort_order: row.sort_order,
+                                  });
+                                  setGenreTemplateDialog({ mode: "edit", id: row.id });
+                                }}
+                              >
+                                <Pencil className="w-3.5 h-3.5 mr-1 inline" /> Edit
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="custom-titles" className="space-y-4 mt-4 focus-visible:outline-none">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/50 pb-4">
+                  <div>
+                    <h3 className="font-display font-semibold flex items-center gap-2">
+                      <Gamepad2 className="w-4 h-4 text-primary" /> Unverified custom game titles
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+                      Organizers can add games not in the catalog. Verifying promotes them so every tenant sees them on public taxonomy
+                      reads.
+                    </p>
+                  </div>
+                </div>
+                {customGamesLoading ? (
+                  <LoadingSpinner />
+                ) : (customGamesPending.titles || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">No pending custom titles.</p>
+                ) : (
+                  <div className="space-y-3 max-h-[32rem] overflow-y-auto">
+                    {(customGamesPending.titles || []).map((row) => {
+                      const draft = customGameAssets[row.id] || {};
+                      const bannerVal = draft.banner_url ?? row.banner_url ?? "";
+                      const iconVal = draft.icon_url ?? row.icon_url ?? "";
+                      return (
+                        <div
+                          key={row.id}
+                          className="rounded-xl border border-border/60 bg-secondary/25 p-4 flex flex-col lg:flex-row lg:items-start gap-4"
+                        >
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="font-semibold text-foreground">{row.name}</p>
+                            <p className="text-xs text-muted-foreground font-mono break-all">{row.slug}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {row.genre_name}
+                              {row.genre_template_name ? ` · template: ${row.genre_template_name}` : ""} · tenant{" "}
+                              {row.created_by_tenant_id || "—"} · roster {row.default_team_roster_size} ·{" "}
+                              {row.competition_scoring_type} / {row.match_scoring_mode}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              Created {row.created_date ? new Date(row.created_date).toLocaleString() : "—"}
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-2 w-full lg:w-64 shrink-0">
+                            <Input
+                              placeholder="Banner URL (optional)"
+                              value={bannerVal}
+                              onChange={(e) =>
+                                setCustomGameAssets((s) => ({
+                                  ...s,
+                                  [row.id]: { ...s[row.id], banner_url: e.target.value },
+                                }))
+                              }
+                              className="bg-secondary/50 text-xs"
+                            />
+                            <Input
+                              placeholder="Icon URL (optional)"
+                              value={iconVal}
+                              onChange={(e) =>
+                                setCustomGameAssets((s) => ({
+                                  ...s,
+                                  [row.id]: { ...s[row.id], icon_url: e.target.value },
+                                }))
+                              }
+                              className="bg-secondary/50 text-xs"
+                            />
+                            <Button
+                              size="sm"
+                              className="w-full"
+                              disabled={verifyCustomGameMutation.isPending}
+                              onClick={() =>
+                                verifyCustomGameMutation.mutate({
+                                  id: row.id,
+                                  banner_url: bannerVal.trim() || undefined,
+                                  icon_url: iconVal.trim() || undefined,
+                                })
+                              }
+                            >
+                              Verify and promote
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={genreTemplateDialog != null}
+        onOpenChange={(o) => {
+          if (!o) setGenreTemplateDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{genreTemplateDialog?.mode === "create" ? "New scoring template" : "Edit scoring template"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div>
+              <Label className="text-xs text-muted-foreground">Slug (URL key)</Label>
+              <Input
+                value={genreTemplateForm.slug}
+                onChange={(e) => setGenreTemplateForm((f) => ({ ...f, slug: e.target.value }))}
+                disabled={genreTemplateDialog?.mode === "edit"}
+                placeholder="e.g. my-custom-rules"
+                className="mt-1 bg-secondary/50 font-mono text-xs"
+              />
+              {genreTemplateDialog?.mode === "edit" ? (
+                <p className="text-[10px] text-muted-foreground mt-1">Slug is fixed after create.</p>
+              ) : null}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Display name</Label>
+              <Input
+                value={genreTemplateForm.name}
+                onChange={(e) => setGenreTemplateForm((f) => ({ ...f, name: e.target.value }))}
+                className="mt-1 bg-secondary/50"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Rules summary (shown to organizers)</Label>
+              <Textarea
+                value={genreTemplateForm.rules_summary}
+                onChange={(e) => setGenreTemplateForm((f) => ({ ...f, rules_summary: e.target.value }))}
+                className="mt-1 bg-secondary/50 min-h-[88px] text-xs"
+                placeholder="How wins, rounds, and rosters work for this rules profile…"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Default roster size</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={genreTemplateForm.default_team_roster_size}
+                  onChange={(e) =>
+                    setGenreTemplateForm((f) => ({ ...f, default_team_roster_size: parseInt(e.target.value, 10) || 1 }))
+                  }
+                  className="mt-1 bg-secondary/50"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Sort order</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={9999}
+                  value={genreTemplateForm.sort_order}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
+                  className="mt-1 bg-secondary/50"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Min team size (optional)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={genreTemplateForm.min_team_size}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, min_team_size: e.target.value }))}
+                  placeholder="empty = no min"
+                  className="mt-1 bg-secondary/50"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Max team size (optional)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={genreTemplateForm.max_team_size}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, max_team_size: e.target.value }))}
+                  placeholder="empty = no max"
+                  className="mt-1 bg-secondary/50"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Suggested format</Label>
+                <select
+                  value={genreTemplateForm.suggested_format}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, suggested_format: e.target.value }))}
+                  className="w-full mt-1 h-9 rounded-md bg-secondary/80 border border-border px-2 text-foreground text-xs"
+                >
+                  {["single_elimination", "double_elimination", "round_robin", "swiss"].map((v) => (
+                    <option key={v} value={v}>
+                      {v.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Competition scoring</Label>
+                <select
+                  value={genreTemplateForm.competition_scoring_type}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, competition_scoring_type: e.target.value }))}
+                  className="w-full mt-1 h-9 rounded-md bg-secondary/80 border border-border px-2 text-foreground text-xs"
+                >
+                  <option value="bracket">bracket</option>
+                  <option value="points">points</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Match scoring</Label>
+                <select
+                  value={genreTemplateForm.match_scoring_mode}
+                  onChange={(e) => setGenreTemplateForm((f) => ({ ...f, match_scoring_mode: e.target.value }))}
+                  className="w-full mt-1 h-9 rounded-md bg-secondary/80 border border-border px-2 text-foreground text-xs"
+                >
+                  {["best_of_1", "best_of_3", "best_of_5", "points"].map((v) => (
+                    <option key={v} value={v}>
+                      {v.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-secondary/20 px-3 py-2">
+              <div>
+                <p className="text-xs font-medium">Swiss rounds recommended</p>
+                <p className="text-[10px] text-muted-foreground">Hint for deck / strategy ladders</p>
+              </div>
+              <Switch
+                checked={genreTemplateForm.swiss_recommended}
+                onCheckedChange={(v) => setGenreTemplateForm((f) => ({ ...f, swiss_recommended: v }))}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setGenreTemplateDialog(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={createGenreTemplateMutation.isPending || patchGenreTemplateMutation.isPending}
+                onClick={() => {
+                  if (genreTemplateDialog?.mode === "create") {
+                    createGenreTemplateMutation.mutate({
+                      slug: genreTemplateForm.slug.trim(),
+                      name: genreTemplateForm.name.trim(),
+                      rules_summary: genreTemplateForm.rules_summary,
+                      default_team_roster_size: Number(genreTemplateForm.default_team_roster_size) || 5,
+                      min_team_size: genreTemplateForm.min_team_size === "" ? null : Number(genreTemplateForm.min_team_size),
+                      max_team_size: genreTemplateForm.max_team_size === "" ? null : Number(genreTemplateForm.max_team_size),
+                      suggested_format: genreTemplateForm.suggested_format,
+                      competition_scoring_type: genreTemplateForm.competition_scoring_type,
+                      match_scoring_mode: genreTemplateForm.match_scoring_mode,
+                      swiss_recommended: genreTemplateForm.swiss_recommended,
+                      sort_order: Number(genreTemplateForm.sort_order) || 0,
+                    });
+                  } else if (genreTemplateDialog?.mode === "edit" && genreTemplateDialog.id) {
+                    patchGenreTemplateMutation.mutate({
+                      id: genreTemplateDialog.id,
+                      body: {
+                        name: genreTemplateForm.name.trim(),
+                        rules_summary: genreTemplateForm.rules_summary,
+                        default_team_roster_size: Number(genreTemplateForm.default_team_roster_size) || 5,
+                        min_team_size:
+                          genreTemplateForm.min_team_size === "" ? null : Number(genreTemplateForm.min_team_size),
+                        max_team_size:
+                          genreTemplateForm.max_team_size === "" ? null : Number(genreTemplateForm.max_team_size),
+                        suggested_format: genreTemplateForm.suggested_format,
+                        competition_scoring_type: genreTemplateForm.competition_scoring_type,
+                        match_scoring_mode: genreTemplateForm.match_scoring_mode,
+                        swiss_recommended: genreTemplateForm.swiss_recommended,
+                        sort_order: Number(genreTemplateForm.sort_order) || 0,
+                      },
+                    });
+                  }
+                }}
+              >
+                {genreTemplateDialog?.mode === "create" ? "Create" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!activeDispute} onOpenChange={(o) => !o && setActiveDispute(null)}>
         <DialogContent className="max-w-lg">

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { useTenant } from "@/hooks/useTenant";
-import { Trophy, Plus, Search, Filter } from "lucide-react";
+import { Trophy, Plus, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { motion } from "framer-motion";

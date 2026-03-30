@@ -28,7 +28,13 @@ import oauthStubRoutes from './routes/oauthStub.js';
 import tenantRegistrationRoutes from './routes/tenantRegistrationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import matchEngineRoutes from './routes/matchEngineRoutes.js';
+import communityRoutes from './routes/communityRoutes.js';
+import publicCommunityRoutes from './routes/publicCommunityRoutes.js';
+import feedAliasRoutes from './routes/feedAliasRoutes.js';
+import gameTaxonomyRoutes from './routes/gameTaxonomyRoutes.js';
+import gameTaxonomyWriteRoutes from './routes/gameTaxonomyWriteRoutes.js';
 import { startPrizePayoutBullWorker } from './jobs/prizePayoutBullmq.js';
+import { optionalAuth } from './middleware/auth.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -80,6 +86,8 @@ app.get('/api/health', async (_req, res) => {
 
 app.use('/api/public', publicLimiter, publicStatusRoutes);
 app.use('/api/public', publicLimiter, tournamentCatalogRoutes);
+app.use('/api/public/game-taxonomy', publicLimiter, optionalAuth, gameTaxonomyRoutes);
+app.use('/api/public/community', publicLimiter, publicCommunityRoutes);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/tenant-registration', apiWriteLimiter, platformGateMiddleware, tenantRegistrationRoutes);
 app.use('/api', apiWriteLimiter);
@@ -91,6 +99,15 @@ app.use('/api/engine', platformGateMiddleware, tenantMembershipMiddleware, engin
 app.use('/api/payments', platformGateMiddleware, tenantMembershipMiddleware, paymentsRoutes);
 app.use('/api/notifications', platformGateMiddleware, notificationRoutes);
 app.use('/api/match-engine', platformGateMiddleware, tenantMembershipMiddleware, matchEngineRoutes);
+app.use('/api/community', apiWriteLimiter, platformGateMiddleware, communityRoutes);
+app.use('/api/feed', apiWriteLimiter, platformGateMiddleware, feedAliasRoutes);
+app.use(
+  '/api/v1/game-taxonomy',
+  apiWriteLimiter,
+  platformGateMiddleware,
+  tenantMembershipMiddleware,
+  gameTaxonomyWriteRoutes
+);
 app.use('/api/v1', platformGateMiddleware, tenantMembershipMiddleware, crudRoutes);
 app.use('/api/paystack', platformGateMiddleware, paystackRoutes);
 app.use('/api/flutterwave', platformGateMiddleware, flutterwaveRoutes);
@@ -118,6 +135,42 @@ async function start() {
     });
     socket.on('leave-tournament', (tid) => {
       if (typeof tid === 'string' && tid) socket.leave(`tournament:${tid}`);
+    });
+    socket.on('join-feed', (payload) => {
+      if (payload && typeof payload === 'object') {
+        if (payload.scope === 'global') socket.join('feed:global');
+        const tenantId = typeof payload.tenantId === 'string' ? payload.tenantId.trim() : '';
+        if (tenantId) socket.join(`feed:tenant:${tenantId}`);
+      }
+    });
+    socket.on('leave-feed', (payload) => {
+      if (payload && typeof payload === 'object') {
+        if (payload.scope === 'global') socket.leave('feed:global');
+        const tenantId = typeof payload.tenantId === 'string' ? payload.tenantId.trim() : '';
+        if (tenantId) socket.leave(`feed:tenant:${tenantId}`);
+      }
+    });
+
+    // Match lobby chat scoping (temporary “war room” per active match).
+    socket.on('join-match-lobby', (matchId) => {
+      if (typeof matchId === 'string' && matchId.trim()) {
+        socket.join(`match:lobby:${matchId.trim()}`);
+      }
+    });
+    socket.on('leave-match-lobby', (matchId) => {
+      if (typeof matchId === 'string' && matchId.trim()) {
+        socket.leave(`match:lobby:${matchId.trim()}`);
+      }
+    });
+    socket.on('join-match-live', (matchId) => {
+      if (typeof matchId === 'string' && matchId.trim()) {
+        socket.join(`match:live:${matchId.trim()}`);
+      }
+    });
+    socket.on('leave-match-live', (matchId) => {
+      if (typeof matchId === 'string' && matchId.trim()) {
+        socket.leave(`match:live:${matchId.trim()}`);
+      }
     });
   });
   setRealtimeIo(io);

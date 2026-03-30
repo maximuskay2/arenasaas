@@ -298,6 +298,64 @@ async function main() {
       ON payment_ledger (reference)
       WHERE reference IS NOT NULL AND btrim(reference) <> '';
 
+    CREATE TABLE IF NOT EXISTS community_posts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id TEXT,
+      author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      post_type TEXT NOT NULL DEFAULT 'strategy'
+        CHECK (post_type IN ('announcement', 'strategy', 'recruitment')),
+      media_url TEXT,
+      pinned BOOLEAN NOT NULL DEFAULT FALSE,
+      deleted_at TIMESTAMPTZ,
+      like_count INTEGER NOT NULL DEFAULT 0,
+      comment_count INTEGER NOT NULL DEFAULT 0,
+      created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_community_posts_tenant_live
+      ON community_posts (tenant_id, created_date DESC)
+      WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_community_posts_global_live
+      ON community_posts (created_date DESC)
+      WHERE deleted_at IS NULL AND tenant_id IS NULL;
+
+    CREATE TABLE IF NOT EXISTS community_post_comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body TEXT NOT NULL,
+      deleted_at TIMESTAMPTZ,
+      created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_community_comments_post ON community_post_comments (post_id)
+      WHERE deleted_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS community_post_likes (
+      post_id UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (post_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS community_shadowbans (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tenant_id TEXT,
+      scope TEXT NOT NULL DEFAULT 'tenant' CHECK (scope IN ('global', 'tenant')),
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      reason TEXT,
+      created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_community_shadowban_unique
+      ON community_shadowbans (user_id, scope, COALESCE(tenant_id, ''));
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON community_posts TO arena_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON community_post_comments TO arena_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON community_post_likes TO arena_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON community_shadowbans TO arena_app;
+
     CREATE OR REPLACE FUNCTION public.sync_user_achievements_mirror()
     RETURNS TRIGGER
     LANGUAGE plpgsql
@@ -329,6 +387,84 @@ async function main() {
       FOR EACH ROW
       EXECUTE FUNCTION public.sync_user_achievements_mirror();
   `);
+    const taxonomySeedPath = join(__dirname, 'migrations/game_taxonomy_seed.sql');
+    await pool.query(`
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS game_title_id UUID;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS team_roster_size INTEGER;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS competition_scoring_type TEXT;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS genre_template_id UUID;
+      DO $tgtpl$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_genre_templates')
+           AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tournaments')
+           AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tournaments_genre_template_id_fkey') THEN
+          ALTER TABLE tournaments
+            ADD CONSTRAINT tournaments_genre_template_id_fkey
+            FOREIGN KEY (genre_template_id) REFERENCES game_genre_templates(id) ON DELETE SET NULL;
+        END IF;
+      END
+      $tgtpl$;
+      CREATE INDEX IF NOT EXISTS idx_tournaments_genre_template ON tournaments(genre_template_id);
+      DO $gtfk$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_titles')
+           AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tournaments')
+           AND NOT EXISTS (
+             SELECT 1 FROM pg_constraint WHERE conname = 'tournaments_game_title_id_fkey'
+           ) THEN
+          ALTER TABLE tournaments
+            ADD CONSTRAINT tournaments_game_title_id_fkey
+            FOREIGN KEY (game_title_id) REFERENCES game_titles(id) ON DELETE SET NULL;
+        END IF;
+      END
+      $gtfk$;
+      ALTER TABLE tournaments DROP CONSTRAINT IF EXISTS tournaments_competition_scoring_type_check;
+      ALTER TABLE tournaments ADD CONSTRAINT tournaments_competition_scoring_type_check
+        CHECK (competition_scoring_type IS NULL OR competition_scoring_type IN ('bracket', 'points'));
+
+      GRANT SELECT, INSERT, UPDATE, DELETE ON game_platforms TO arena_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON game_genres TO arena_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON game_genre_templates TO arena_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON game_titles TO arena_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON game_title_platforms TO arena_app;
+
+      ALTER TABLE game_titles ADD COLUMN IF NOT EXISTS genre_template_id UUID;
+      DO $gttfk$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_genre_templates')
+           AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_titles')
+           AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'game_titles_genre_template_id_fkey') THEN
+          ALTER TABLE game_titles
+            ADD CONSTRAINT game_titles_genre_template_id_fkey
+            FOREIGN KEY (genre_template_id) REFERENCES game_genre_templates(id) ON DELETE SET NULL;
+        END IF;
+      END
+      $gttfk$;
+      CREATE INDEX IF NOT EXISTS idx_game_titles_genre_template ON game_titles(genre_template_id);
+      ALTER TABLE game_genre_templates ADD COLUMN IF NOT EXISTS updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      ALTER TABLE game_platforms ADD COLUMN IF NOT EXISTS updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      ALTER TABLE game_genres ADD COLUMN IF NOT EXISTS updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      DROP TRIGGER IF EXISTS trg_updated_game_title_platforms ON game_title_platforms;
+
+      DO $gtuserfk$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_titles')
+           AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+          ALTER TABLE game_titles DROP CONSTRAINT IF EXISTS game_titles_created_by_user_id_fkey;
+          ALTER TABLE game_titles ADD CONSTRAINT game_titles_created_by_user_id_fkey
+            FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+          ALTER TABLE game_titles DROP CONSTRAINT IF EXISTS game_titles_verified_by_fkey;
+          ALTER TABLE game_titles ADD CONSTRAINT game_titles_verified_by_fkey
+            FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END
+      $gtuserfk$;
+    `);
+    await pool.query(readFileSync(taxonomySeedPath, 'utf8'));
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_xp INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE teams ALTER COLUMN elo SET DEFAULT 1200;
+    `);
     const rls = readFileSync(rlsSchema, 'utf8');
     await pool.query(rls);
     const pw = process.env.ARENA_APP_PASSWORD || 'arena_app_dev';

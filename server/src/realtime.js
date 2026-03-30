@@ -42,6 +42,17 @@ function pseudoViewersFromMatchId(matchId) {
 /**
  * Global landing-page ticker when a match moves into in_progress.
  */
+/** Community / war-room feed — rooms feed:global (platform) and feed:tenant:{id} */
+export function emitCommunityFeedEvent(event, payload) {
+  if (!_io) return;
+  const tid = payload?.tenant_id != null && String(payload.tenant_id).trim() ? String(payload.tenant_id).trim() : '';
+  if (!tid) {
+    _io.to('feed:global').emit(event, payload);
+  } else {
+    _io.to(`feed:tenant:${tid}`).emit(event, payload);
+  }
+}
+
 export function emitLiveTickerForMatch(prevStatus, matchRow) {
   if (!_io || !matchRow?.tournament_id) return;
   if (matchRow.status !== 'in_progress') return;
@@ -54,4 +65,22 @@ export function emitLiveTickerForMatch(prevStatus, matchRow) {
     team_b: matchRow.team_b_name || 'TBD',
     viewers: pseudoViewersFromMatchId(matchRow.id),
   });
+}
+
+/**
+ * Match lobby chat (high-speed scoped feed).
+ * Room: `match:lobby:{matchId}` with event `match:lobby:message`.
+ */
+export function emitMatchLobbyMessage(chatRow) {
+  if (!_io || !chatRow?.match_id) return;
+  const matchId = String(chatRow.match_id);
+  _io.to(`match:lobby:${matchId}`).emit('match:lobby:message', chatRow);
+}
+
+/** Match Center “kill feed” / ticker — room match:live:{matchId} */
+export function emitMatchCenterFeed(matchId, payload) {
+  if (!_io || !matchId) return;
+  const mid = String(matchId).trim();
+  if (!mid) return;
+  _io.to(`match:live:${mid}`).emit('match:live:feed', { at: Date.now(), ...payload });
 }

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { useState } from "react";
 import PageHeader from "../components/shared/PageHeader";
-import { CheckCircle2, Circle, Clock, AlertTriangle, ChevronDown } from "lucide-react";
+import { CheckCircle2, Circle, Clock } from "lucide-react";
 
 const PRIORITY_STYLES = {
   high: "text-red-400 bg-red-500/10 border-red-500/30",

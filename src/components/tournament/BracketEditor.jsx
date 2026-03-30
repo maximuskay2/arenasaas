@@ -3,7 +3,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { Button } from "@/components/ui/button";
-import { Shield, GripVertical, AlertTriangle, RotateCcw, Save } from "lucide-react";
+import { GripVertical, AlertTriangle, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 

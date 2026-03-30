@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
-import { ArrowLeft, Trophy, Users, DollarSign, Target } from "lucide-react";
+import { ArrowLeft, Trophy, Users, DollarSign, Target, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import InsightsNode from "@/components/insights/InsightsNode";
@@ -44,6 +44,8 @@ export default function PublicTeamProfile() {
   }
 
   const { team, appearances = [], roster_stats: rosterStats = [], career_prize_total: prize = 0 } = data;
+  const apex = !!team?.apex_tier;
+  const globalElo = team?.global_elo != null ? Math.round(Number(team.global_elo)) : null;
   const roster = Array.isArray(team.roster) ? team.roster : [];
   const wins = Number(team.wins ?? 0);
   const losses = Number(team.losses ?? 0);
@@ -61,8 +63,18 @@ export default function PublicTeamProfile() {
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2">Team profile</p>
             <h1 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter">{team.name}</h1>
-            <p className="text-slate-500 font-bold text-sm mt-2">
+            <p className="text-slate-500 font-bold text-sm mt-2 flex flex-wrap items-center gap-2">
               [{team.tag}] · {team.tournament_name || "Tournament"}
+              {globalElo != null && (
+                <span className="text-primary font-display text-xs border border-primary/40 px-2 py-0.5 rounded-md bg-primary/10">
+                  Elo {globalElo}
+                </span>
+              )}
+              {apex && (
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-primary border border-primary/50 px-2 py-0.5 rounded-full bg-primary/10">
+                  <Crown className="w-3 h-3" /> Apex tier
+                </span>
+              )}
             </p>
           </div>
           <div className="text-right text-xs text-slate-500 font-bold uppercase tracking-widest">
