@@ -76,12 +76,12 @@ export async function listCommunityPosts({
 
   const sql = `
     SELECT p.*,
-      u.email AS author_email,
-      u.full_name AS author_full_name,
-      u.role AS author_role,
+      auth.author_email,
+      auth.author_full_name,
+      auth.author_role,
       ${likedByMeExpr} AS liked_by_me
     FROM community_posts p
-    INNER JOIN users u ON u.id = p.author_id
+    LEFT JOIN LATERAL public.arena_community_author_snapshot(p.author_id) auth ON true
     WHERE ${where}
     ORDER BY p.pinned DESC NULLS LAST, p.created_date DESC
     LIMIT $${limParam} OFFSET $${offParam}
@@ -98,7 +98,6 @@ export async function listCommunityPosts({
   const countSql = `
     SELECT COUNT(*)::int AS c
     FROM community_posts p
-    INNER JOIN users u ON u.id = p.author_id
     WHERE ${where}
   `;
 

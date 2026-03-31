@@ -6,6 +6,7 @@ import { pool } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { clientSafeErrorMessage } from '../clientSafeError.js';
 import { emitCommunityFeedEvent } from '../realtime.js';
+import { runWithRls, rlsContextFromRequest } from '../rls/transaction.js';
 import {
   canModeratePost,
   canPostAnnouncement,
@@ -143,32 +144,48 @@ router.post('/posts', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'tenant_id required for tenant posts' });
   }
 
-  const client = await pool.connect();
   try {
-    if (type === 'announcement') {
-      const ok = await canPostAnnouncement(client, req.user.sub, req.user.role, tenantId);
-      if (!ok) return res.status(403).json({ error: 'Only staff can post announcements' });
-    } else if (!useGlobal) {
-      const roles = await userTenantRoles(client, req.user.sub, tenantId);
-      if (!roles.length && !isPlatformStaff(req.user.role)) {
-        return res.status(403).json({ error: 'Not a member of this organization' });
-      }
-    }
+    const out = await runWithRls(
+      pool,
+      {
+        ...rlsContextFromRequest(req, { publicCatalog: false }),
+        /** tenant feed is scoped; global is null */
+        tenantId: tenantId || '',
+      },
+      async (client) => {
+        if (type === 'announcement') {
+          const ok = await canPostAnnouncement(client, req.user.sub, req.user.role, tenantId);
+          if (!ok) return { forbidden: 'Only staff can post announcements' };
+        } else if (!useGlobal) {
+          const roles = await userTenantRoles(client, req.user.sub, tenantId);
+          if (!roles.length && !isPlatformStaff(req.user.role)) {
+            return { forbidden: 'Not a member of this organization' };
+          }
+        }
 
-    const { rows } = await client.query(
-      `INSERT INTO community_posts (tenant_id, author_id, title, content, post_type, media_url, pinned)
-       VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [tenantId, req.user.sub, titleS, contentS, type, mediaS, type === 'announcement' ? true : false]
+        const { rows } = await client.query(
+          `INSERT INTO community_posts (tenant_id, author_id, title, content, post_type, media_url, pinned)
+           VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)
+           RETURNING *`,
+          [tenantId, req.user.sub, titleS, contentS, type, mediaS, type === 'announcement' ? true : false]
+        );
+        const post = rows[0];
+        const ures = await client.query(`SELECT email, full_name, role FROM users WHERE id = $1::uuid`, [req.user.sub]);
+        const u = ures.rows[0] || {};
+        return {
+          post,
+          author: u,
+        };
+      }
     );
-    const post = rows[0];
-    const ures = await client.query(`SELECT email, full_name, role FROM users WHERE id = $1::uuid`, [req.user.sub]);
-    const u = ures.rows[0] || {};
+
+    if (out?.forbidden) return res.status(403).json({ error: out.forbidden });
+
     const payload = {
-      ...post,
-      author_email: u.email,
-      author_full_name: u.full_name,
-      author_role: u.role,
+      ...(out?.post || {}),
+      author_email: out?.author?.email,
+      author_full_name: out?.author?.full_name,
+      author_role: out?.author?.role,
       liked_by_me: false,
     };
     emitCommunityFeedEvent('community:post', { post: payload, tenant_id: tenantId, scope: useGlobal ? 'global' : 'tenant' });
@@ -176,8 +193,6 @@ router.post('/posts', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: clientSafeErrorMessage(e) });
-  } finally {
-    client.release();
   }
 });
 
@@ -311,10 +326,10 @@ router.get('/posts/:id/comments', requireAuth, async (req, res) => {
     if (!chk.rowCount) return res.status(404).json({ error: 'Not found' });
 
     const { rows } = await pool.query(
-      `SELECT c.*, u.email AS author_email, u.full_name AS author_full_name
+      `SELECT c.*, snap.author_email, snap.author_full_name
        FROM community_post_comments c
        INNER JOIN community_posts p ON p.id = c.post_id
-       INNER JOIN users u ON u.id = c.user_id
+       LEFT JOIN LATERAL public.arena_community_author_snapshot(c.user_id) snap ON true
        WHERE c.post_id = $1::uuid
          AND c.deleted_at IS NULL
          AND p.deleted_at IS NULL

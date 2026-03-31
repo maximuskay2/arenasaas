@@ -1050,6 +1050,44 @@ CREATE POLICY pc_del ON platform_config FOR DELETE USING (
 );
 
 -- ---------- game_templates ----------
+-- tenant_id NULL = platform catalog (seed). Non-null = league-owned template (organizer/staff CRUD).
+-- Membership is checked via SECURITY DEFINER helpers so nested SELECT on user_tenants is not blocked by RLS.
+CREATE OR REPLACE FUNCTION public.arena_user_member_of_tenant_for_game_template(p_tenant_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM user_tenants ut
+    WHERE ut.user_id::text = NULLIF(trim(both from COALESCE(current_setting('app.user_id', true), '')), '')
+      AND ut.tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(p_tenant_id, '')), '')
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.arena_user_staff_of_tenant_for_game_template(p_tenant_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM user_tenants ut
+    WHERE ut.user_id::text = NULLIF(trim(both from COALESCE(current_setting('app.user_id', true), '')), '')
+      AND ut.tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(p_tenant_id, '')), '')
+      AND ut.role_in_tenant IN ('organizer', 'admin', 'staff')
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.arena_user_member_of_tenant_for_game_template(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.arena_user_staff_of_tenant_for_game_template(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.arena_user_member_of_tenant_for_game_template(TEXT) TO arena_app;
+GRANT EXECUTE ON FUNCTION public.arena_user_staff_of_tenant_for_game_template(TEXT) TO arena_app;
+
 ALTER TABLE game_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_templates FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS gt_sel ON game_templates;
@@ -1057,17 +1095,40 @@ DROP POLICY IF EXISTS gt_ins ON game_templates;
 DROP POLICY IF EXISTS gt_upd ON game_templates;
 DROP POLICY IF EXISTS gt_del ON game_templates;
 CREATE POLICY gt_sel ON game_templates FOR SELECT USING (
-  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
-  OR COALESCE(current_setting('app.allow_game_template_read', true), '') = '1'
+             COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR        tenant_id IS NULL
+  OR        public.arena_user_member_of_tenant_for_game_template(tenant_id)
 );
 CREATE POLICY gt_ins ON game_templates FOR INSERT WITH CHECK (
-  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+             COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    tenant_id IS NOT NULL
+    AND tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(current_setting('app.tenant_id', true), '')), '')
+    AND public.arena_user_staff_of_tenant_for_game_template(tenant_id)
+  )
 );
 CREATE POLICY gt_upd ON game_templates FOR UPDATE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    tenant_id IS NOT NULL
+    AND tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(current_setting('app.tenant_id', true), '')), '')
+    AND public.arena_user_staff_of_tenant_for_game_template(tenant_id)
+  )
+) WITH CHECK (
+  COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    tenant_id IS NOT NULL
+    AND tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(current_setting('app.tenant_id', true), '')), '')
+    AND public.arena_user_staff_of_tenant_for_game_template(tenant_id)
+  )
 );
 CREATE POLICY gt_del ON game_templates FOR DELETE USING (
   COALESCE(current_setting('app.is_platform_admin', true), '') = 'true'
+  OR (
+    tenant_id IS NOT NULL
+    AND tenant_id IS NOT DISTINCT FROM NULLIF(trim(both from COALESCE(current_setting('app.tenant_id', true), '')), '')
+    AND public.arena_user_staff_of_tenant_for_game_template(tenant_id)
+  )
 );
 
 -- ---------- game taxonomy (platform / genre / title) ----------

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,6 @@ import LoadingSpinner from "../components/shared/LoadingSpinner";
 import { User, Search, Plus, Send, MapPin, Clock, Trophy, Edit, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { useTenant } from "@/hooks/useTenant";
 
 const REGIONS = ["NA", "EU", "LATAM", "ASIA", "OCE", "AF", "ME"];
 const AVAILABILITY = ["weekdays", "weekends", "anytime", "limited"];
@@ -45,9 +45,14 @@ function AgentCard({ agent, currentUser, onInvite, onEdit, onDelete }) {
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => onDelete(agent.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
             </>
           )}
-          {!isOwn && (
+          {!isOwn && currentUser && (
             <Button size="sm" onClick={() => onInvite(agent)} className="text-xs gap-1 h-7 font-display">
               <Send className="w-3 h-3" /> Invite
+            </Button>
+          )}
+          {!isOwn && !currentUser && (
+            <Button size="sm" variant="secondary" asChild className="text-xs h-7 font-display">
+              <Link to="/login">Log in to invite</Link>
             </Button>
           )}
         </div>
@@ -137,7 +142,6 @@ function AgentForm({ initial, onSave, onClose, isPending }) {
 
 export default function FreeAgents() {
   const queryClient = useQueryClient();
-  const { tenantId } = useTenant();
   const [search, setSearch] = useState("");
   const [filterRegion, setFilterRegion] = useState("all");
   const [filterGame, setFilterGame] = useState("");
@@ -192,6 +196,7 @@ export default function FreeAgents() {
       });
     },
     onSuccess: () => toast.success("Invite sent via email!"),
+    onError: (e) => toast.error(e?.message || "Could not send invite"),
   });
 
   const isListed = agents.some((a) => a.player_email === currentUser?.email);
@@ -215,6 +220,15 @@ export default function FreeAgents() {
           )
         }
       />
+
+      {!currentUser ? (
+        <p className="rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-xs text-muted-foreground">
+          <Link to="/login" className="font-semibold text-primary hover:underline">
+            Log in
+          </Link>{" "}
+          to list yourself, edit your profile, send invites, and receive responses. Anyone can browse listings.
+        </p>
+      ) : null}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">

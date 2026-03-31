@@ -518,12 +518,16 @@ router.get('/export-my-data', requireAuth, async (req, res) => {
 });
 
 function accessTokenPayload(userRow, tenantMemberships) {
-  const tid = tenantMemberships[0]?.tenant_id ?? '';
+  const list = Array.isArray(tenantMemberships) ? tenantMemberships : [];
+  const staffRoles = new Set(['organizer', 'admin', 'staff']);
+  const staffFirst = list.find((m) => m?.role_in_tenant && staffRoles.has(String(m.role_in_tenant)));
+  const pick = staffFirst || list[0];
+  const tid = pick?.tenant_id != null && String(pick.tenant_id).trim() !== '' ? String(pick.tenant_id).trim() : '';
   return {
     sub: String(userRow.id),
     email: userRow.email,
     role: userRow.role,
-    tenant_id: tid ? String(tid) : '',
+    tenant_id: tid,
   };
 }
 

@@ -174,6 +174,8 @@ const PUBLIC_GET_TABLES = new Set([
   'teams',
   'matches',
   'game_templates',
+  /** Recruitment directory — RLS allows reads with app.allow_public_directory_read for anonymous clients. */
+  'free_agents',
 ]);
 
 function canReadUnauthenticated(table) {
@@ -191,9 +193,15 @@ async function tenantIdForCrud(req) {
   const header = String(h['x-tenant-id'] || h['X-Tenant-ID'] || '').trim();
   if (header) return header;
   const slug = tenantSlugFromRequest(req);
-  if (!slug) return '';
-  const { rows } = await pool.query('SELECT arena_tenant_id_by_slug($1) AS tid', [slug]);
-  return rows[0]?.tid || '';
+  if (slug) {
+    const { rows } = await pool.query('SELECT arena_tenant_id_by_slug($1) AS tid', [slug]);
+    const tid = rows[0]?.tid || '';
+    if (tid) return tid;
+  }
+  /** Match rlsContextFromRequest: primary tenant from JWT when X-Tenant-ID / slug absent; keeps app.tenant_id aligned with game_templates.tenant_id injection. */
+  const u = req.user;
+  if (u?.tenant_id != null && String(u.tenant_id).trim() !== '') return String(u.tenant_id).trim();
+  return '';
 }
 
 function baseCrudContext(req, table) {
@@ -270,6 +278,22 @@ router.post('/:entity', optionalAuth, async (req, res) => {
           return res.status(400).json({ error: e.message, code: e.code });
         }
         throw e;
+      }
+    }
+    if (table === 'game_templates' && req.user) {
+      const platformAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+      if (!platformAdmin) {
+        let tid = String((await tenantIdForCrud(req)) || '').trim();
+        if (!tid && req.user.tenant_id != null) tid = String(req.user.tenant_id).trim();
+        if (!tid) {
+          return res.status(400).json({
+            error: 'Tenant context required (sign in with a league host account and X-Tenant-ID) to create a game template',
+            code: 'tenant_context_required',
+          });
+        }
+        body.tenant_id = tid;
+      } else if (body.tenant_id === '' || body.tenant_id === undefined) {
+        body.tenant_id = null;
       }
     }
     const keys = Object.keys(body).filter((k) => cols.has(k));

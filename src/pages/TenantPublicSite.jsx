@@ -41,7 +41,9 @@ function TournamentCard({ tournament, onView }) {
           {tournament.prize_pool > 0 && (
             <div className="flex items-center gap-1.5">
               <DollarSign className="w-3.5 h-3.5 text-green-400" />
-              <span className="text-green-400 font-semibold">${tournament.prize_pool.toLocaleString()}</span>
+              <span className="text-green-400 font-semibold">
+                {(tournament.currency || "USD") + " " + (tournament.prize_pool ?? 0).toLocaleString()}
+              </span>
             </div>
           )}
           {tournament.start_date && (

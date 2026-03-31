@@ -6,7 +6,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Users } from "lucide-react";
 import SeedingPanel from "./SeedingPanel";
 import { motion } from "framer-motion";
@@ -72,6 +72,9 @@ export default function TeamsList({ teams, tournamentId, tournament }) {
               <DialogContent className="glass border-border/50">
                 <DialogHeader>
                   <DialogTitle className="font-display">Add Team</DialogTitle>
+                  <DialogDescription>
+                    Add a team to seed and test brackets. Player-paid entry (if enabled) is handled from the public tournament page.
+                  </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleAddTeam} className="space-y-4">
                   {tournament?.entry_fee > 0 && (

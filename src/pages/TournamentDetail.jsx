@@ -11,13 +11,18 @@ import {
   ArrowLeft, Play, Users, Trophy, Calendar, DollarSign, 
   Settings2, Trash2, UserPlus, Building2, Clock, 
   Share2, LayoutDashboard, Zap, Activity, ExternalLink,   Radio,
-  BarChart3,
+  BarChart3, Upload,
 } from "lucide-react";
 
 // Components
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
 import StatusBadge from "../components/shared/StatusBadge";
 import BracketView from "../components/tournament/BracketView";
@@ -44,6 +49,9 @@ export default function TournamentDetail() {
   const { user, isAuthenticated, isLoadingAuth } = useAuth();
   const [bracketEditMode, setBracketEditMode] = useState(false);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const editBannerFileRef = useRef(null);
   const paymentReturnToastShown = useRef(false);
   const joinIntentConsumed = useRef(false);
 
@@ -79,16 +87,18 @@ export default function TournamentDetail() {
     enabled: !!id,
   });
 
+  const crudResolved = !!id && !loadingCrudTournament;
+  const hasCrudTournament = !!(tournamentRows?.length);
+
   const { data: publicTournament, isLoading: loadingPublicTournament } = useQuery({
     queryKey: ["public-tournament", id],
     queryFn: () => maxikay.public.tournamentById(id).catch(() => null),
-    enabled: !!id,
+    enabled: !!id && crudResolved && !hasCrudTournament,
     retry: false,
   });
 
   const tournamentCrud = tournamentRows?.[0];
   const tournament = tournamentCrud ?? publicTournament ?? null;
-  const hasCrudTournament = !!tournamentCrud;
 
   const isLoading =
     !!id &&
@@ -104,7 +114,7 @@ export default function TournamentDetail() {
   const { data: matchesPublic = [] } = useQuery({
     queryKey: ["public-tournament-matches", id],
     queryFn: () => maxikay.public.tournamentMatches(id).catch(() => []),
-    enabled: !!id && !!tournament && !hasCrudTournament,
+    enabled: !!id && crudResolved && !!tournament && !hasCrudTournament,
   });
 
   const matches = hasCrudTournament ? matchesCrud : matchesPublic;
@@ -118,7 +128,7 @@ export default function TournamentDetail() {
   const { data: teamsPublic = [] } = useQuery({
     queryKey: ["public-tournament-teams", id],
     queryFn: () => maxikay.public.tournamentTeams(id).catch(() => []),
-    enabled: !!id && !!tournament && !hasCrudTournament,
+    enabled: !!id && crudResolved && !!tournament && !hasCrudTournament,
   });
 
   const teams = hasCrudTournament ? teamsCrud : teamsPublic;
@@ -126,7 +136,7 @@ export default function TournamentDetail() {
   const { data: performanceData } = useQuery({
     queryKey: ["public-tournament-performance", id],
     queryFn: () => maxikay.public.tournamentPerformance(id).catch(() => null),
-    enabled: !!id && !!tournament,
+    enabled: !!id && crudResolved && !!tournament && !hasCrudTournament,
   });
 
   const showLeagueTab =
@@ -135,7 +145,7 @@ export default function TournamentDetail() {
   const { data: leagueStandingsRes } = useQuery({
     queryKey: ["public-tournament-league-standings", id],
     queryFn: () => maxikay.public.tournamentLeagueStandings(id).catch(() => null),
-    enabled: !!id && showLeagueTab,
+    enabled: !!id && crudResolved && showLeagueTab && !hasCrudTournament,
   });
 
   useEffect(() => {
@@ -258,6 +268,59 @@ export default function TournamentDetail() {
     onError: (e) => toast.error(e?.data?.error || e?.message || "Could not update"),
   });
 
+  const updateTournament = useMutation({
+    mutationFn: (patch) => maxikay.entities.Tournament.update(id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tournament", id] });
+      queryClient.invalidateQueries({ queryKey: ["public-tournament", id] });
+      queryClient.invalidateQueries({ queryKey: ["tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["discovery-catalog"] });
+      toast.success("Tournament updated");
+      setEditOpen(false);
+    },
+    onError: (e) => toast.error(e?.data?.error || e?.message || "Could not update tournament"),
+  });
+
+  const toLocalInput = (iso) => {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+    } catch {
+      return "";
+    }
+  };
+
+  const fromLocalInput = (v) => {
+    if (!v) return "";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString();
+  };
+
+  useEffect(() => {
+    if (!editOpen) return;
+    if (!tournament) return;
+    setEditForm({
+      name: tournament.name || "",
+      status: tournament.status || "draft",
+      currency: (tournament.currency || "USD").toUpperCase().slice(0, 8),
+      prize_pool: Number(tournament.prize_pool || 0),
+      entry_type: tournament.entry_type === "PAID" ? "PAID" : "FREE",
+      entry_fee: Number(tournament.entry_fee || 0),
+      max_teams: Number(tournament.max_teams || 8),
+      registration_deadline: toLocalInput(tournament.registration_deadline),
+      start_date: toLocalInput(tournament.start_date),
+      end_date: toLocalInput(tournament.end_date),
+      banner_url: tournament.banner_url || "",
+      stream_url: tournament.stream_url || "",
+      description: tournament.description || "",
+      rules: tournament.rules || "",
+    });
+  }, [editOpen, tournament]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col bg-[#0a0a0f] text-slate-50">
@@ -333,6 +396,14 @@ export default function TournamentDetail() {
              <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 font-black uppercase italic" onClick={() => navigate(`/tournaments/${id}/lobby`)}>
                 Player Lobby
              </Button>
+             {hasCrudTournament && tournament.status === "draft" && (
+               <Button
+                 onClick={() => updateTournament.mutate({ status: "registration_open" })}
+                 className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl font-black uppercase italic px-6"
+               >
+                 Publish
+               </Button>
+             )}
              {hasCrudTournament && (tournament.status === "draft" || tournament.status === "registration_closed") && teams.length >= 2 && (
                <Button onClick={() => generateBracket.mutate()} className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl font-black uppercase italic px-6">
                  <Zap className="mr-2 h-4 w-4" /> Start Bracket
@@ -371,7 +442,7 @@ export default function TournamentDetail() {
         <InsightsNode
           icon={DollarSign}
           label="Prize pool"
-          value={`$${Number(tournament.prize_pool || 0).toLocaleString()}`}
+          value={`${tournament.currency || "USD"} ${Number(tournament.prize_pool || 0).toLocaleString()}`}
           sub={formatPrizeCardLine(tournament)}
         />
       </div>
@@ -381,7 +452,7 @@ export default function TournamentDetail() {
           <Trophy className="h-4 w-4" /> Prize pool &amp; placements
         </h3>
         <p className="text-xs text-muted-foreground">
-          Entry: {tournament.entry_fee > 0 ? `$${tournament.entry_fee} ${tournament.entry_type === "PAID" ? "(paid)" : ""}` : "Free"} ·{" "}
+          Entry: {tournament.entry_fee > 0 ? `${tournament.currency || "USD"} ${tournament.entry_fee} ${tournament.entry_type === "PAID" ? "(paid)" : ""}` : "Free"} ·{" "}
           {tournament.currency || "USD"}
         </p>
         <ul className="text-sm text-foreground/90 space-y-1 list-disc list-inside">
@@ -488,6 +559,277 @@ export default function TournamentDetail() {
           )}
         </div>
         
+        {hasCrudTournament && (
+          <div className="w-full md:w-auto shrink-0 flex flex-col items-stretch md:items-end gap-3">
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-2xl border-white/10 bg-white/5 text-slate-200 font-black uppercase italic h-12 px-6"
+                >
+                  <Settings2 className="h-4 w-4 mr-2" /> Edit tournament
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="glass border-border/50 max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="font-black italic uppercase">Edit tournament</DialogTitle>
+                  <DialogDescription>
+                    Update your tournament details. Publishing sets status to registration open so players can see it in Discover.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {!editForm ? null : (
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const patch = {
+                        name: editForm.name?.trim() || undefined,
+                        status: editForm.status,
+                        currency: String(editForm.currency || "USD").toUpperCase().slice(0, 8),
+                        prize_pool: Number(editForm.prize_pool || 0),
+                        entry_type: editForm.entry_type === "PAID" ? "PAID" : "FREE",
+                        entry_fee: editForm.entry_type === "PAID" ? Number(editForm.entry_fee || 0) : 0,
+                        max_teams: Math.max(2, Number(editForm.max_teams || 2)),
+                        registration_deadline: editForm.registration_deadline
+                          ? fromLocalInput(editForm.registration_deadline)
+                          : undefined,
+                        start_date: editForm.start_date ? fromLocalInput(editForm.start_date) : undefined,
+                        end_date: editForm.end_date ? fromLocalInput(editForm.end_date) : undefined,
+                        banner_url: editForm.banner_url?.trim() || undefined,
+                        stream_url: editForm.stream_url?.trim() || undefined,
+                        description: editForm.description || "",
+                        rules: editForm.rules || "",
+                      };
+                      // remove undefined so PATCH only touches set fields
+                      for (const k of Object.keys(patch)) if (patch[k] === undefined) delete patch[k];
+                      if (patch.entry_type === "PAID") {
+                        const fee = Number(patch.entry_fee);
+                        if (!Number.isFinite(fee) || fee <= 0) {
+                          toast.error("Paid tournaments require entry fee > 0");
+                          return;
+                        }
+                      }
+                      updateTournament.mutate(patch);
+                    }}
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="sm:col-span-2">
+                        <Label>Name</Label>
+                        <Input
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Status</Label>
+                        <Select
+                          value={editForm.status}
+                          onValueChange={(v) => setEditForm((p) => ({ ...p, status: v }))}
+                        >
+                          <SelectTrigger className="mt-1 bg-secondary/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft (organizer only)</SelectItem>
+                            <SelectItem value="registration_open">Published (registration open)</SelectItem>
+                            <SelectItem value="registration_closed">Registration closed</SelectItem>
+                            <SelectItem value="in_progress">In progress</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>Currency</Label>
+                        <Input
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.currency}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, currency: e.target.value.toUpperCase().slice(0, 8) }))
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Prize pool</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.prize_pool}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, prize_pool: parseFloat(e.target.value) || 0 }))
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Max teams</Label>
+                        <Input
+                          type="number"
+                          min={2}
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.max_teams}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, max_teams: parseInt(e.target.value, 10) || 2 }))
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Entry type</Label>
+                        <Select
+                          value={editForm.entry_type}
+                          onValueChange={(v) =>
+                            setEditForm((p) => ({
+                              ...p,
+                              entry_type: v === "PAID" ? "PAID" : "FREE",
+                              entry_fee: v === "PAID" ? p.entry_fee : 0,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="mt-1 bg-secondary/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="FREE">Free entry</SelectItem>
+                            <SelectItem value="PAID">Paid entry</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>Entry fee</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          className="mt-1 bg-secondary/50"
+                          disabled={editForm.entry_type !== "PAID"}
+                          value={editForm.entry_fee}
+                          onChange={(e) =>
+                            setEditForm((p) => ({ ...p, entry_fee: parseFloat(e.target.value) || 0 }))
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Registration deadline</Label>
+                        <Input
+                          type="datetime-local"
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.registration_deadline}
+                          onChange={(e) => setEditForm((p) => ({ ...p, registration_deadline: e.target.value }))}
+                        />
+                      </div>
+
+                      <div>
+                        <Label>Start date</Label>
+                        <Input
+                          type="datetime-local"
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.start_date}
+                          onChange={(e) => setEditForm((p) => ({ ...p, start_date: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <Label>Banner URL</Label>
+                        <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                          <Input
+                            className="bg-secondary/50 flex-1"
+                            value={editForm.banner_url}
+                            onChange={(e) => setEditForm((p) => ({ ...p, banner_url: e.target.value }))}
+                            placeholder="https://… or upload (dev: data URL)"
+                          />
+                          <input
+                            ref={editBannerFileRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!f) return;
+                              if (f.size > 15 * 1024 * 1024) {
+                                toast.error("File too large (max 15MB)");
+                                return;
+                              }
+                              try {
+                                const out = await maxikay.integrations.Core.UploadFile({ file: f });
+                                if (out?.file_url) {
+                                  setEditForm((p) => ({ ...p, banner_url: out.file_url }));
+                                  toast.success("Banner uploaded");
+                                } else {
+                                  toast.error("Upload did not return a file URL");
+                                }
+                              } catch (err) {
+                                toast.error(err?.message || "Upload failed");
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 shrink-0"
+                            onClick={() => editBannerFileRef.current?.click()}
+                          >
+                            <Upload className="w-3.5 h-3.5" /> Upload
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <Label>Stream URL</Label>
+                        <Input
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.stream_url}
+                          onChange={(e) => setEditForm((p) => ({ ...p, stream_url: e.target.value }))}
+                          placeholder="https://youtube.com/... or https://twitch.tv/..."
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <Label>Description</Label>
+                        <Textarea
+                          rows={3}
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.description}
+                          onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <Label>Rules</Label>
+                        <Textarea
+                          rows={4}
+                          className="mt-1 bg-secondary/50"
+                          value={editForm.rules}
+                          onChange={(e) => setEditForm((p) => ({ ...p, rules: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="ghost" onClick={() => setEditOpen(false)} disabled={updateTournament.isPending}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={updateTournament.isPending} className="font-display text-xs tracking-wider">
+                        {updateTournament.isPending ? "Saving…" : "Save changes"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+
         {tournament.status === "registration_open" && (
           <div className="w-full md:w-auto shrink-0 flex flex-col items-stretch md:items-end gap-3">
             <button

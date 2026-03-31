@@ -60,8 +60,15 @@ export default function AppLayout() {
                     <DropdownMenuItem asChild>
                       <Link to="/dashboard">Career hub</Link>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/free-agents">Free agent market</Link>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Link to="/free-agents" className={topNavLinkClass}>
+                  Agents
+                </Link>
                 <Link to="/community" className={topNavLinkClass}>
                   Community
                 </Link>

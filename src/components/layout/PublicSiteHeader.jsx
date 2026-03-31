@@ -144,8 +144,16 @@ export default function PublicSiteHeader() {
                 <DropdownMenuItem asChild>
                   <Link to={isAuthenticated ? "/dashboard" : "/login"}>Career hub</Link>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/free-agents">Free agent market</Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link to="/free-agents" className={topNavLinkClass}>
+              Agents
+            </Link>
 
             <Link to="/community" className={topNavLinkClass}>
               Community
@@ -228,6 +236,13 @@ export default function PublicSiteHeader() {
                   onClick={closeMobileNav}
                 >
                   Career hub
+                </Link>
+                <Link
+                  to="/free-agents"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  onClick={closeMobileNav}
+                >
+                  Free agent market
                 </Link>
 
                 <p className="px-3 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border/40 mt-3">

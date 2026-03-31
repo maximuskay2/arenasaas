@@ -38,6 +38,7 @@ const HOST_MENU_EXTRA = [
 
 const PLAYER_MENU_EXTRA = [
   { path: "/community", label: "💬 Community" },
+  { path: "/free-agents", label: "🔍 Free Agents" },
   { path: "/players/profile", label: "👤 Player profile" },
   { path: "/dashboard/settings", label: "⚙️ Hub settings" },
   { path: "/check-in", label: "✅ Check-in" },

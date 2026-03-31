@@ -310,7 +310,16 @@ export default function TournamentCreate() {
     return false;
   };
 
-  const submit = () => {
+  const submit = (nextStatus = "draft") => {
+    const status =
+      nextStatus === "registration_open" ||
+      nextStatus === "registration_closed" ||
+      nextStatus === "in_progress" ||
+      nextStatus === "completed" ||
+      nextStatus === "cancelled"
+        ? nextStatus
+        : "draft";
+
     const rulesExtra = form.prize_split_summary
       ? `\n\n--- Prize distribution (organizer intent) ---\n${form.prize_split_summary}\nFunds settle via your configured payout rail (Stripe / Paystack / Flutterwave).`
       : "";
@@ -333,18 +342,19 @@ export default function TournamentCreate() {
         ? { ...form.payout_config }
         : { prize_pool_percent: 85, tenant_percent: 15 };
     const prize_structure = prize_tbd ? {} : buildPrizeStructurePayload(form);
+    const entryType = form.entry_type === "PAID" ? "PAID" : "FREE";
     finishMutation.mutate({
       ...rest,
       genre_template_id: game_genre_template_id || undefined,
-      entry_type: form.entry_type,
-      entry_fee: form.entry_type === "FREE" ? 0 : form.entry_fee,
+      entry_type: entryType,
+      entry_fee: entryType === "FREE" ? 0 : form.entry_fee,
       payout_config: payout,
       prize_disclosure_tbd: !!prize_tbd,
       prize_structure,
       rules: (rest.rules || "") + rulesExtra,
       banner_url: form.banner_url || undefined,
       stream_url: form.stream_url?.trim() || undefined,
-      status: "draft",
+      status,
     });
   };
 
@@ -494,7 +504,7 @@ export default function TournamentCreate() {
             <div>
               <Label>Platform *</Label>
               <Select
-                value={form.game_platform_id || undefined}
+                value={form.game_platform_id}
                 onValueChange={(v) =>
                   setForm((p) => ({
                     ...p,
@@ -523,7 +533,7 @@ export default function TournamentCreate() {
             <div>
               <Label>Genre *</Label>
               <Select
-                value={form.game_genre_id || undefined}
+                value={form.game_genre_id}
                 disabled={!form.game_platform_id}
                 onValueChange={(v) =>
                   setForm((p) => ({
@@ -618,7 +628,7 @@ export default function TournamentCreate() {
                     below start from the template—you can still adjust.
                   </p>
                   <Select
-                    value={form.game_genre_template_id || undefined}
+                    value={form.game_genre_template_id}
                     disabled={!form.game_genre_id}
                     onValueChange={(tid) => {
                       const tpl = genreTemplates.find((x) => x.id === tid);
@@ -810,6 +820,38 @@ export default function TournamentCreate() {
             <p className="text-xs text-muted-foreground">
               Entry fees are collected via your tenant checkout flows; prizes credit player wallets on finalize per your prize structure.
             </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Entry type</Label>
+                <Select
+                  value={form.entry_type}
+                  onValueChange={(v) => {
+                    const next = v === "PAID" ? "PAID" : "FREE";
+                    setForm((p) => ({
+                      ...p,
+                      entry_type: next,
+                      entry_fee: next === "FREE" ? 0 : p.entry_fee,
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="mt-1 bg-secondary/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FREE">Free entry</SelectItem>
+                    <SelectItem value="PAID">Paid entry</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Currency</Label>
+                <Input
+                  value={form.currency}
+                  onChange={(e) => update("currency", e.target.value.toUpperCase().slice(0, 8))}
+                  className="mt-1 bg-secondary/50"
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>Prize pool (headline / cap)</Label>
@@ -829,11 +871,8 @@ export default function TournamentCreate() {
                   value={form.entry_fee}
                   onChange={(e) => update("entry_fee", parseFloat(e.target.value) || 0)}
                   className="mt-1 bg-secondary/50"
+                  disabled={form.entry_type !== "PAID"}
                 />
-              </div>
-              <div>
-                <Label>Currency</Label>
-                <Input value={form.currency} onChange={(e) => update("currency", e.target.value.toUpperCase().slice(0, 8))} className="mt-1 bg-secondary/50" />
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1072,9 +1111,25 @@ export default function TournamentCreate() {
             Next <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
         ) : (
-          <Button type="button" disabled={!canNext() || finishMutation.isPending} onClick={submit} className="font-display text-xs tracking-wider">
-            {finishMutation.isPending ? "Creating…" : "Create draft tournament"}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canNext() || finishMutation.isPending}
+              onClick={() => submit("draft")}
+              className="font-display text-xs tracking-wider"
+            >
+              {finishMutation.isPending ? "Saving…" : "Save as draft"}
+            </Button>
+            <Button
+              type="button"
+              disabled={!canNext() || finishMutation.isPending}
+              onClick={() => submit("registration_open")}
+              className="font-display text-xs tracking-wider"
+            >
+              {finishMutation.isPending ? "Publishing…" : "Publish (open registration)"}
+            </Button>
+          </div>
         )}
       </div>
     </div>

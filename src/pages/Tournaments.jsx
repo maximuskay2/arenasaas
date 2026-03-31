@@ -110,7 +110,9 @@ export default function Tournaments() {
                         <span>{tournament.format?.replace(/_/g, " ")}</span>
                         <span>{tournament.registered_teams || 0}/{tournament.max_teams} teams</span>
                         {tournament.prize_pool > 0 && (
-                          <span className="text-primary font-semibold">${tournament.prize_pool.toLocaleString()}</span>
+                          <span className="text-primary font-semibold">
+                            {(tournament.currency || "USD") + " " + (tournament.prize_pool ?? 0).toLocaleString()}
+                          </span>
                         )}
                       </div>
                     </div>

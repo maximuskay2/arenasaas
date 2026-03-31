@@ -53,7 +53,8 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json', limit:
 app.post('/api/paystack/webhook', express.raw({ type: 'application/json', limit: '2mb' }), paystackWebhookHandler);
 app.post('/api/flutterwave/webhook', express.raw({ type: 'application/json', limit: '2mb' }), flutterwaveWebhookHandler);
 
-app.use(express.json({ limit: '2mb' }));
+// Dev uploads return data URLs (base64) which can exceed 2MB when saved into banner_url/rules, etc.
+app.use(express.json({ limit: '20mb' }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

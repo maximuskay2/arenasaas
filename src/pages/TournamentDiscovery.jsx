@@ -424,7 +424,9 @@ export default function TournamentDiscovery({ showPublicHeader = true } = {}) {
                     <dl className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <dt className="text-slate-600 uppercase tracking-wider">Prize pool</dt>
-                        <dd className="font-black text-white">{prize > 0 ? `$${prize.toLocaleString()}` : "—"}</dd>
+                        <dd className="font-black text-white">
+                          {prize > 0 ? `${t.currency || "USD"} ${prize.toLocaleString()}` : "—"}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-slate-600 uppercase tracking-wider">Teams</dt>

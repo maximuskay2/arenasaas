@@ -126,7 +126,7 @@ router.post('/matches/:matchId/evidence', requireAuth, evidenceUpload.array('scr
   }
 });
 
-router.use(express.json({ limit: '2mb' }));
+router.use(express.json({ limit: '20mb' }));
 
 router.get('/disputes', requireAuth, async (req, res) => {
   const tenantId = tenantHeader(req);

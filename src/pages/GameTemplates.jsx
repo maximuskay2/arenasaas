@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PageHeader from "../components/shared/PageHeader";
 import EmptyState from "../components/shared/EmptyState";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
@@ -23,10 +23,22 @@ export default function GameTemplates() {
   });
 
   const createGame = useMutation({
-    mutationFn: (data) => maxikay.entities.GameTemplate.create({
-      ...data,
-      map_pool: data.map_pool ? data.map_pool.split(",").map(s => s.trim()) : [],
-    }),
+    mutationFn: (data) => {
+      const roster = Number(data.roster_size);
+      const roster_size = Number.isFinite(roster) && roster >= 1 ? Math.floor(roster) : 5;
+      const map_pool = data.map_pool
+        ? String(data.map_pool)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+      return maxikay.entities.GameTemplate.create({
+        title: String(data.title || "").trim(),
+        roster_size,
+        scoring_mode: data.scoring_mode || "best_of_1",
+        map_pool,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["game-templates"] });
       setOpen(false);
@@ -56,6 +68,9 @@ export default function GameTemplates() {
             <DialogContent className="glass border-border/50">
               <DialogHeader>
                 <DialogTitle className="font-display">Add Game Template</DialogTitle>
+                <DialogDescription>
+                  Reusable rules for your league. Roster size and scoring apply when you pick this template for a tournament.
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={(e) => { e.preventDefault(); createGame.mutate(form); }} className="space-y-4">
                 <div>
@@ -65,7 +80,16 @@ export default function GameTemplates() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Roster Size</Label>
-                    <Input type="number" value={form.roster_size} onChange={(e) => setForm(p => ({ ...p, roster_size: parseInt(e.target.value) }))} min={1} className="mt-1 bg-secondary/50" />
+                    <Input
+                      type="number"
+                      value={form.roster_size}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        setForm((p) => ({ ...p, roster_size: Number.isFinite(n) && n >= 1 ? n : 1 }));
+                      }}
+                      min={1}
+                      className="mt-1 bg-secondary/50"
+                    />
                   </div>
                   <div>
                     <Label>Scoring Mode</Label>

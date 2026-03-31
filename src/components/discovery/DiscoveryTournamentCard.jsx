@@ -23,6 +23,7 @@ export default function DiscoveryTournamentCard({
   const joined = tournament.joined_count ?? tournament.registered_teams ?? 0;
   const maxSlots = tournament.max_slots ?? tournament.max_teams ?? 0;
   const organizer = tournament.organizer_name || tournament.organizer_slug || "Organizer";
+  const currency = tournament.currency || "USD";
 
   return (
     <motion.div
@@ -82,7 +83,7 @@ export default function DiscoveryTournamentCard({
           {label}
         </span>
         <span className="text-primary font-black italic text-sm shrink-0">
-          {prize > 0 ? `$${prize.toLocaleString()}` : "—"}
+          {prize > 0 ? `${currency} ${prize.toLocaleString()}` : "—"}
         </span>
       </div>
 

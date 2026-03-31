@@ -104,7 +104,7 @@ function OrganizerAppRoutes() {
         <Route path="/onboarding" element={<RequireLeagueHost><Onboarding /></RequireLeagueHost>} />
         <Route path="/revenue" element={<RequireLeagueHost><RevenueReport /></RequireLeagueHost>} />
         <Route path="/players/profile" element={<PlayerProfile />} />
-        <Route path="/free-agents" element={<RequireLeagueHost><FreeAgents /></RequireLeagueHost>} />
+        <Route path="/free-agents" element={<FreeAgents />} />
         <Route path="/sponsorships" element={<RequireLeagueHost><Sponsorships /></RequireLeagueHost>} />
         <Route path="/sponsor-insights" element={<RequireLeagueHost><SponsorInsights /></RequireLeagueHost>} />
         <Route path="/team-finance" element={<RequireLeagueHost><TeamFinance /></RequireLeagueHost>} />
@@ -177,6 +177,7 @@ const AuthenticatedApp = () => {
           <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
           <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
           <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
+          <Route path="/free-agents" element={<PublicShell><FreeAgents /></PublicShell>} />
           <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
           <Route path="/match/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -228,6 +229,7 @@ const AuthenticatedApp = () => {
         <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
         <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
         <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
+        <Route path="/free-agents" element={<PublicShell><FreeAgents /></PublicShell>} />
         <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
         <Route path="/match/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
         <Route path="/privacy" element={<PrivacyPolicy />} />

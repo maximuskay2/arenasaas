@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, forwardRef } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import moment from "moment";
@@ -45,6 +45,7 @@ import {
 import { extractMatchIdFromMatchResultsMediaUrl } from "@/lib/matchResultsMediaUrl";
 import PageHeader from "@/components/shared/PageHeader";
 import PublicSiteHeader from "@/components/layout/PublicSiteHeader";
+import { toast } from "sonner";
 
 function FeedLink({ icon: Icon, label, active, onClick }) {
   return (
@@ -60,17 +61,6 @@ function FeedLink({ icon: Icon, label, active, onClick }) {
       <Icon className="h-4 w-4 shrink-0" />
       <span className="text-[10px] uppercase tracking-widest">{label}</span>
     </button>
-  );
-}
-
-function TrendItem({ label, count }) {
-  return (
-    <div className="group cursor-pointer">
-      <p className="text-[11px] font-black uppercase italic tracking-tighter transition-colors group-hover:text-primary">
-        {label}
-      </p>
-      <p className="text-[9px] font-bold uppercase text-muted-foreground">{count}</p>
-    </div>
   );
 }
 
@@ -179,12 +169,14 @@ function useFeedPermissions(scope, tenantId, user) {
     const tenantStaff = inTenant.some((m) =>
       ["organizer", "admin", "staff"].includes(m.role_in_tenant)
     );
+    const canPostTenant = platform || inTenant.length > 0;
     const canModTenant = platform || tenantStaff;
     const canAnnounce = platform || tenantStaff;
     const canShadowbanGlobal = platform;
     const canShadowbanTenant = canModTenant && tenantId;
     return {
       canAnnounce,
+      canPostTenant,
       canModTenant,
       canShadowbanGlobal,
       canShadowbanTenant,
@@ -225,6 +217,13 @@ export default function CommunityHub() {
       setFeedScope("global");
     }
   }, [feedScope, tenantId]);
+
+  useEffect(() => {
+    if (!readOnly && feedScope === "tenant" && tenantId && !perms.canPostTenant) {
+      setFeedScope("global");
+      toast.error("You are not a member of this organization.");
+    }
+  }, [readOnly, feedScope, tenantId, perms.canPostTenant]);
 
   const listParams = useMemo(() => {
     const p = { scope: feedScope, limit: 30, page: 1 };
@@ -298,12 +297,32 @@ export default function CommunityHub() {
         },
         feedScope === "tenant" && tenantId ? { headers: { "X-Tenant-ID": tenantId } } : {}
       ),
-    onSuccess: () => {
+    onMutate: () => {
+      toast.message("Posting…");
+    },
+    onSuccess: (created) => {
       setComposerTitle("");
       setComposerBody("");
       setComposerMedia("");
+      // Ensure the new post is visible immediately even before refetch/realtime.
+      if (created?.id) {
+        queryClient.setQueryData(["community-posts", listParams], (prev) => {
+          if (!prev || !Array.isArray(prev.items)) {
+            return { items: [created], page: 1, limit: 30, total: 1 };
+          }
+          const existing = prev.items.some((p) => p?.id === created.id);
+          const nextItems = existing ? prev.items : [created, ...prev.items];
+          return {
+            ...prev,
+            items: nextItems,
+            total: typeof prev.total === "number" ? prev.total + (existing ? 0 : 1) : prev.total,
+          };
+        });
+      }
       invalidateFeed();
+      toast.success("Posted");
     },
+    onError: (e) => toast.error(e?.data?.error || e?.message || "Could not post"),
   });
 
   const likeMut = useMutation({
@@ -347,15 +366,15 @@ export default function CommunityHub() {
   return (
     <div className="min-h-screen bg-background">
       {readOnly ? <PublicSiteHeader /> : null}
-      <div className="mx-auto max-w-6xl px-6 pt-6">
+      <div className="mx-auto max-w-7xl px-6 pt-6">
         <PageHeader
           title="Community"
           subtitle="War room — announcements, strategy, and recruitment"
         />
       </div>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 p-6 font-sans selection:bg-primary/30 lg:grid-cols-4">
-        <aside className="hidden space-y-6 lg:block">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 p-6 font-sans selection:bg-primary/30 lg:grid-cols-5">
+        <aside className="hidden space-y-6 lg:block lg:col-span-1">
           <div className="space-y-4 rounded-3xl border border-border/50 bg-card/40 p-6 backdrop-blur-sm">
             <h3 className="text-[10px] font-black uppercase italic tracking-[0.2em] text-muted-foreground">
               Command center
@@ -408,7 +427,7 @@ export default function CommunityHub() {
           </div>
         </aside>
 
-        <section className="space-y-6 lg:col-span-2">
+        <section className="space-y-6 lg:col-span-4">
           <div className="space-y-4 rounded-[2rem] border border-primary/20 bg-card/30 p-6 backdrop-blur-xl">
             <div className="flex gap-4">
               <div className="h-10 w-10 shrink-0 rounded-full border border-border/50 bg-muted" />
@@ -483,6 +502,7 @@ export default function CommunityHub() {
                 disabled={
                   readOnly ||
                   createPostMut.isPending ||
+                  (feedScope === "tenant" && tenantId && !perms.canPostTenant) ||
                   (!composerBody.trim() && !composerTitle.trim())
                 }
                 className="rounded-xl px-6 font-black uppercase italic"
@@ -494,38 +514,40 @@ export default function CommunityHub() {
           </div>
 
           {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="h-48 animate-pulse rounded-[2.5rem] bg-muted/30" />
               ))}
             </div>
           ) : (
-            <div className="space-y-4">
-              <AnimatePresence mode="popLayout">
-                {items.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    user={user}
-                    perms={perms}
-                    feedScope={feedScope}
-                    tenantId={tenantId}
-                    readOnly={readOnly}
-                    expanded={expandedPost === post.id}
-                    onToggleExpand={() => setExpandedPost((x) => (x === post.id ? null : post.id))}
-                    onInvalidate={invalidateFeed}
-                    onLike={() => {
-                      if (readOnly) return;
-                      likeMut.mutate({ id: post.id, liked: !!post.liked_by_me });
-                    }}
-                    onOpenShadowban={() => {
-                      setShadowUserId(String(post.author_id || ""));
-                      setShadowScope(feedScope === "global" ? "global" : "tenant");
-                      setShadowOpen(true);
-                    }}
-                  />
-                ))}
-              </AnimatePresence>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <AnimatePresence mode="popLayout">
+                  {items.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      user={user}
+                      perms={perms}
+                      feedScope={feedScope}
+                      tenantId={tenantId}
+                      readOnly={readOnly}
+                      expanded={expandedPost === post.id}
+                      onToggleExpand={() => setExpandedPost((x) => (x === post.id ? null : post.id))}
+                      onInvalidate={invalidateFeed}
+                      onLike={() => {
+                        if (readOnly) return;
+                        likeMut.mutate({ id: post.id, liked: !!post.liked_by_me });
+                      }}
+                      onOpenShadowban={() => {
+                        setShadowUserId(String(post.author_id || ""));
+                        setShadowScope(feedScope === "global" ? "global" : "tenant");
+                        setShadowOpen(true);
+                      }}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
               {!items.length ? (
                 <p className="py-16 text-center text-sm text-muted-foreground">
                   No posts yet. Open the mic.
@@ -534,34 +556,6 @@ export default function CommunityHub() {
             </div>
           )}
         </section>
-
-        <aside className="hidden space-y-6 lg:block">
-          <div className="space-y-4 rounded-3xl border border-border/50 bg-card/40 p-6">
-            <h3 className="text-[10px] font-black uppercase italic tracking-[0.2em] text-primary">
-              Live trends
-            </h3>
-            <div className="space-y-3">
-              <TrendItem label="#TournamentMeta" count="Arena feed" />
-              <TrendItem label="#LookingForTeam" count="Recruitment tab" />
-              <TrendItem label="#ClipReview" count="Drop Twitch / YT links" />
-            </div>
-            {(perms.canShadowbanGlobal || perms.canShadowbanTenant) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full font-black uppercase"
-                onClick={() => {
-                  setShadowUserId("");
-                  setShadowScope(feedScope === "global" ? "global" : "tenant");
-                  setShadowOpen(true);
-                }}
-              >
-                <UserX className="mr-2 h-4 w-4" />
-                Shadowban user
-              </Button>
-            )}
-          </div>
-        </aside>
       </div>
 
       <ShadowbanDialog
@@ -579,19 +573,22 @@ export default function CommunityHub() {
   );
 }
 
-function PostCard({
-  post,
-  user,
-  perms,
-  feedScope,
-  tenantId,
-  readOnly,
-  expanded,
-  onToggleExpand,
-  onInvalidate,
-  onLike,
-  onOpenShadowban,
-}) {
+const PostCard = forwardRef(function PostCard(
+  {
+    post,
+    user,
+    perms,
+    feedScope,
+    tenantId,
+    readOnly,
+    expanded,
+    onToggleExpand,
+    onInvalidate,
+    onLike,
+    onOpenShadowban,
+  },
+  ref
+) {
   const queryClient = useQueryClient();
   const author =
     post.author_full_name?.trim() || post.author_email?.split("@")[0] || "Player";
@@ -640,6 +637,7 @@ function PostCard({
 
   return (
     <motion.article
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -798,7 +796,7 @@ function PostCard({
       </AnimatePresence>
     </motion.article>
   );
-}
+});
 
 function ShadowbanDialog({
   open,

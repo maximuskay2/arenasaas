@@ -51,10 +51,10 @@ router.get("/posts/:id/comments", async (req, res) => {
     if (!chk.rowCount) return res.status(404).json({ error: "Not found" });
 
     const { rows } = await pool.query(
-      `SELECT c.*, u.email AS author_email, u.full_name AS author_full_name
+      `SELECT c.*, snap.author_email, snap.author_full_name
        FROM community_post_comments c
        INNER JOIN community_posts p ON p.id = c.post_id
-       INNER JOIN users u ON u.id = c.user_id
+       LEFT JOIN LATERAL public.arena_community_author_snapshot(c.user_id) snap ON true
        WHERE c.post_id = $1::uuid
          AND c.deleted_at IS NULL
          AND p.deleted_at IS NULL

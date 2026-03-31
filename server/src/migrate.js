@@ -34,6 +34,10 @@ async function main() {
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payment_ledger') THEN
           ALTER TABLE payment_ledger ADD COLUMN IF NOT EXISTS beneficiary_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
         END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'game_templates') THEN
+          ALTER TABLE game_templates ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+          CREATE INDEX IF NOT EXISTS idx_game_templates_tenant ON game_templates(tenant_id);
+        END IF;
       END
       $pre$;
     `);
@@ -108,6 +112,7 @@ async function main() {
     UPDATE tenant_entitlements SET single_tournament_remaining = GREATEST(COALESCE(one_shot_credits, 0), 0)
       WHERE status = 'one_shot';
     UPDATE tenant_entitlements SET single_tournament_remaining = 0 WHERE status IS DISTINCT FROM 'one_shot';
+
     CREATE TABLE IF NOT EXISTS processed_forfeit_jobs (
       idempotency_key TEXT PRIMARY KEY,
       match_id TEXT NOT NULL,
@@ -355,6 +360,22 @@ async function main() {
     GRANT SELECT, INSERT, UPDATE, DELETE ON community_post_comments TO arena_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON community_post_likes TO arena_app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON community_shadowbans TO arena_app;
+
+    -- Community feed lists join author display fields; direct SELECT on users is blocked by RLS for other rows.
+    CREATE OR REPLACE FUNCTION public.arena_community_author_snapshot(p_user_id uuid)
+    RETURNS TABLE (author_email text, author_full_name text, author_role text)
+    LANGUAGE sql
+    SECURITY DEFINER
+    SET search_path = public
+    STABLE
+    AS $$
+      SELECT u.email::text,
+        COALESCE(u.full_name, '')::text,
+        u.role::text
+      FROM users u
+      WHERE u.id = p_user_id;
+    $$;
+    GRANT EXECUTE ON FUNCTION public.arena_community_author_snapshot(uuid) TO arena_app;
 
     CREATE OR REPLACE FUNCTION public.sync_user_achievements_mirror()
     RETURNS TRIGGER

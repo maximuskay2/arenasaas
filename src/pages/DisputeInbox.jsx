@@ -10,16 +10,30 @@ import { Label } from "@/components/ui/label";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import { toast } from "sonner";
 import { Gavel } from "lucide-react";
+import { LEAGUE_HOST_ROLES } from "@/lib/routingLogic";
 
 export default function DisputeInbox() {
-  const { tenantId } = useTenant();
+  const { tenantId, user } = useTenant();
   const queryClient = useQueryClient();
   const [scores, setScores] = useState({});
+
+  const canViewDisputes = (() => {
+    if (!tenantId) return false;
+    const role = user?.role;
+    if (role === "admin" || role === "super_admin") return true;
+    const memberships = user?.tenant_memberships;
+    if (!Array.isArray(memberships) || memberships.length === 0) return false;
+    const hostRoles = new Set(LEAGUE_HOST_ROLES);
+    return memberships.some(
+      (m) => String(m?.tenant_id || "") === String(tenantId) && hostRoles.has(String(m?.role_in_tenant || ""))
+    );
+  })();
 
   const { data, isLoading } = useQuery({
     queryKey: ["match-engine-disputes", tenantId],
     queryFn: () => maxikay.matchEngine.listDisputes(),
-    enabled: !!tenantId,
+    enabled: canViewDisputes,
+    retry: false,
   });
 
   const disputes = data?.disputes ?? [];
@@ -39,6 +53,16 @@ export default function DisputeInbox() {
     return (
       <div className="p-6">
         <p className="text-sm text-muted-foreground">Select a tenant context to load disputes.</p>
+      </div>
+    );
+  }
+
+  if (!canViewDisputes) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">
+          Dispute inbox is available to organization staff only (organizer/admin/staff).
+        </p>
       </div>
     );
   }

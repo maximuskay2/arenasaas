@@ -25,18 +25,28 @@ async function fetchUserRowAndMemberships(userId) {
   return { userRow, tm };
 }
 
+/** Match auth route: JWT primary tenant prefers staff membership so X-Tenant-ID / RLS align with league ops. */
+function primaryTenantFromMemberships(tenantMemberships) {
+  const list = Array.isArray(tenantMemberships) ? tenantMemberships : [];
+  const staffRoles = new Set(['organizer', 'admin', 'staff']);
+  const staffFirst = list.find((m) => m?.role_in_tenant && staffRoles.has(String(m.role_in_tenant)));
+  const pick = staffFirst || list[0];
+  return pick?.tenant_id ?? null;
+}
+
 function accessTokenPayload(userRow, tenantMemberships) {
-  const tid = tenantMemberships[0]?.tenant_id ?? '';
+  const tidRaw = primaryTenantFromMemberships(tenantMemberships);
+  const tid = tidRaw != null && String(tidRaw).trim() !== '' ? String(tidRaw).trim() : '';
   return {
     sub: String(userRow.id),
     email: userRow.email,
     role: userRow.role,
-    tenant_id: tid ? String(tid) : '',
+    tenant_id: tid,
   };
 }
 
 function formatUser(row, tenant_memberships) {
-  const tenant_id = tenant_memberships[0]?.tenant_id ?? null;
+  const tenant_id = primaryTenantFromMemberships(tenant_memberships);
   return {
     id: row.id,
     email: row.email,

@@ -567,9 +567,18 @@ export const arena = {
         if (res.status === 401 && (await trySilentRefresh())) {
           res = await doUpload();
         }
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
-        return data;
+        const text = await res.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
+        if (!res.ok) {
+          const msg = (data && data.error) || text || 'Upload failed';
+          throw new Error(msg);
+        }
+        return data || {};
       },
       SendEmail: (body) => request('POST', '/api/integrations/send-email', { body }),
     },

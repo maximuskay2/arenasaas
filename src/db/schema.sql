@@ -238,6 +238,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_ledger_reference_unique
 -- ============================================================
 CREATE TABLE IF NOT EXISTS game_templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id TEXT,
   title TEXT NOT NULL,
   logo_url TEXT,
   roster_size INTEGER NOT NULL,
@@ -248,6 +249,8 @@ CREATE TABLE IF NOT EXISTS game_templates (
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_game_templates_tenant ON game_templates(tenant_id);
 
 -- ============================================================
 -- GAME TAXONOMY (platform → genre → title)
@@ -635,6 +638,21 @@ CREATE TABLE IF NOT EXISTS community_shadowbans (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_community_shadowban_unique
   ON community_shadowbans (user_id, scope, COALESCE(tenant_id, ''));
+
+-- Author display for community feeds/threads (bypasses users RLS for snapshot only).
+CREATE OR REPLACE FUNCTION public.arena_community_author_snapshot(p_user_id uuid)
+RETURNS TABLE (author_email text, author_full_name text, author_role text)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT u.email::text,
+    COALESCE(u.full_name, '')::text,
+    u.role::text
+  FROM users u
+  WHERE u.id = p_user_id;
+$$;
 
 -- ============================================================
 -- CHAT MESSAGES
