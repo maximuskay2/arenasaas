@@ -1,43 +1,47 @@
-# Arena Mobile (Flutter)
+# Arena Mobile — player + league organizer
 
-Player + organizer client for **Arena-SaaS**.
+Flutter client for **players** and **tenant league hosts**.  
+**Platform admin (Central Station) stays on the web only.**
 
-## Features
+## Role split
 
-- Discover / free & paid join (solo + **team roster**)
-- My matches + report score
-- Live watch, Elo rankings (team/player)
-- Vault (wallets + trophies)
-- **Real Firebase FCM** (no stub tokens)
-- **Organizer create tournament** (tenant-scoped)
+| Surface | Where |
+|---------|--------|
+| Player hub (discover, join, matches, vault, community) | **Mobile + web** |
+| League organizer (create tournament, ops, disputes) | **Mobile + web** |
+| Platform admin / Central Station / system routes | **Web only** (`/central-station`) |
+
+See [docs/ROLE_BOUNDARIES.md](docs/ROLE_BOUNDARIES.md).
+
+## Navigation
+
+| Tab | Purpose |
+|-----|---------|
+| **Home** | Career hub or league command (toggle if league host) |
+| **Discover** | Tournament marketplace |
+| **Matches** | My matches + report score |
+| **Social** | Community feed |
+| **More** | Rankings, Watch, Vault, Teams, Check-in, Free agents, league ops, Settings |
+
+Platform admins see a banner: **Open Central Station** (web). Organizer tabs stay hidden unless they also have a tenant host membership.
+
+## Intentionally web-only
+
+- Central Station / SystemAdmin / global tenant freeze & impersonation  
+- Platform HWID ban list, commission slider, secrets vault UI  
+- Merchandise, sponsorships finance depth, audit explorer  
+- Bracket pan/zoom editor, full analytics charts  
+- MFA TOTP setup, Stripe Connect full onboarding  
+- Socket.io match lobby chat (use web Match Live)
 
 ## Run
 
 ```bash
 cd mobile
 flutter pub get
-
 flutter run --dart-define=API_BASE=http://127.0.0.1:3001
-# Android emulator: http://10.0.2.2:3001
 ```
 
-## Firebase FCM (required for push)
+Firebase push: [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).
 
-See **[docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)**.
-
-Quick path:
-
-1. `flutterfire configure --project=<id>`
-2. Drop `android/app/google-services.json` and `ios/Runner/GoogleService-Info.plist`
-3. Profile → **Enable push notifications**
-
-Stub tokens (`arena-mobile-dev-…`) are **rejected**.
-
-## Organizer create
-
-Sign in with organizer/admin membership → FAB **Create** or Profile → Create tournament.  
-Select tenant under Profile if you belong to multiple orgs.
-
-## Team join
-
-Open a tournament with roster size &gt; 1 → **Team** mode → team name, tag, captain game ID, teammate email + game IDs.
+API: `npm run dev:full` from repo root.

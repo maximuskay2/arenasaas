@@ -101,16 +101,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               }),
             ],
             const SizedBox(height: 12),
-            if (auth.isOrganizer || user?['role'] == 'admin')
+            if (auth.isLeagueHost)
               ListTile(
                 leading: const Icon(Icons.add_circle_outline),
                 title: const Text('Create tournament'),
-                subtitle: const Text('Organizer flow'),
+                subtitle: const Text('League organizer (tenant)'),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const CreateTournamentScreen()),
                   );
                 },
+              ),
+            if (auth.isPlatformAdmin)
+              const ListTile(
+                leading: Icon(Icons.desktop_windows_outlined, color: Colors.amber),
+                title: Text('Platform admin'),
+                subtitle: Text('Central Station stays on the web app'),
               ),
             ListTile(
               leading: Icon(

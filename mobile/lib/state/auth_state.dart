@@ -13,24 +13,36 @@ class AuthState extends ChangeNotifier {
 
   bool get isLoggedIn => api.token != null && api.token!.isNotEmpty;
 
-  bool get isOrganizer {
+  /// Platform owner (`role: admin`) — Central Station / God view.
+  /// **Web only.** Mobile never exposes system admin APIs or UI.
+  bool get isPlatformAdmin {
     final role = user?['role']?.toString() ?? '';
-    if (const {'admin', 'super_admin', 'organizer', 'referee'}.contains(role)) {
+    return role == 'admin';
+  }
+
+  /// League host for a tenant (organizer tools on mobile are OK).
+  /// Does **not** include platform `admin` unless they also have a tenant membership.
+  bool get isLeagueHost {
+    final role = user?['role']?.toString() ?? '';
+    // Global role used for tenant league admins / staff (not platform God view)
+    if (const {'super_admin', 'organizer', 'referee'}.contains(role)) {
       return true;
     }
-    final mem = user?['tenant_memberships'];
-    if (mem is List && mem.isNotEmpty) {
-      for (final m in mem) {
-        if (m is Map) {
-          final r = m['role_in_tenant']?.toString() ?? m['role']?.toString() ?? '';
-          if (const {'owner', 'admin', 'super_admin', 'organizer'}.contains(r)) {
-            return true;
-          }
-        }
+    for (final m in tenantMemberships) {
+      final r = m['role_in_tenant']?.toString() ?? m['role']?.toString() ?? '';
+      if (const {'owner', 'admin', 'super_admin', 'organizer', 'referee'}.contains(r)) {
+        return true;
       }
     }
     return false;
   }
+
+  /// Mobile organizer hub (create events, disputes, ops for a tenant).
+  /// Platform admins must use the web Central Station for platform control.
+  bool get isOrganizer => isLeagueHost;
+
+  /// True when this account is platform admin and has no league-host membership.
+  bool get platformAdminWebOnly => isPlatformAdmin && !isLeagueHost;
 
   List<Map<String, dynamic>> get tenantMemberships {
     final mem = user?['tenant_memberships'];
@@ -59,7 +71,6 @@ class AuthState extends ChangeNotifier {
         await api.setToken(null);
       } else {
         await _applyUser(user);
-        // Best-effort FCM register after session restore
         unawaited(push?.registerAfterLogin());
       }
     }
@@ -113,6 +124,17 @@ class AuthState extends ChangeNotifier {
 
   Future<void> selectTenant(String tenantId) async {
     await api.setTenantId(tenantId);
+    notifyListeners();
+  }
+
+  Future<void> refreshUser() async {
+    user = await api.me();
+    if (user != null) await _applyUser(user);
+    notifyListeners();
+  }
+
+  void setUserLocal(Map<String, dynamic>? u) {
+    user = u;
     notifyListeners();
   }
 

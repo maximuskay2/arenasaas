@@ -13,10 +13,12 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Arena API client — mirrors web `arenaClient.js` surface used by mobile hubs.
 class ApiClient {
   ApiClient();
 
   String? _token;
+  String? tenantId;
   String? get token => _token;
 
   Future<void> loadSession() async {
@@ -35,10 +37,20 @@ class ApiClient {
     }
   }
 
+  Future<void> setTenantId(String? id) async {
+    tenantId = id;
+    final p = await SharedPreferences.getInstance();
+    if (id == null || id.isEmpty) {
+      await p.remove('arena_tenant_id');
+    } else {
+      await p.setString('arena_tenant_id', id);
+    }
+  }
+
   Uri _u(String path, [Map<String, String>? query]) {
     final base = AppConfig.apiBase.replaceAll(RegExp(r'/$'), '');
-    final p = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$base$p').replace(queryParameters: query);
+    final pth = path.startsWith('/') ? path : '/$path';
+    return Uri.parse('$base$pth').replace(queryParameters: query);
   }
 
   Map<String, String> _headers({Map<String, String>? extra, bool jsonBody = true}) {
@@ -46,12 +58,8 @@ class ApiClient {
       'Accept': 'application/json',
       if (jsonBody) 'Content-Type': 'application/json',
     };
-    if (_token != null && _token!.isNotEmpty) {
-      h['Authorization'] = 'Bearer $_token';
-    }
-    if (tenantId != null && tenantId!.isNotEmpty) {
-      h['X-Tenant-ID'] = tenantId!;
-    }
+    if (_token != null && _token!.isNotEmpty) h['Authorization'] = 'Bearer $_token';
+    if (tenantId != null && tenantId!.isNotEmpty) h['X-Tenant-ID'] = tenantId!;
     if (extra != null) h.addAll(extra);
     return h;
   }
@@ -66,21 +74,22 @@ class ApiClient {
     final uri = _u(path, query);
     final h = _headers(extra: headers);
     late http.Response res;
+    final encoded = body == null ? null : jsonEncode(body);
     switch (method.toUpperCase()) {
       case 'GET':
         res = await http.get(uri, headers: h);
         break;
       case 'POST':
-        res = await http.post(uri, headers: h, body: body == null ? null : jsonEncode(body));
+        res = await http.post(uri, headers: h, body: encoded);
         break;
       case 'PATCH':
-        res = await http.patch(uri, headers: h, body: body == null ? null : jsonEncode(body));
+        res = await http.patch(uri, headers: h, body: encoded);
         break;
       case 'PUT':
-        res = await http.put(uri, headers: h, body: body == null ? null : jsonEncode(body));
+        res = await http.put(uri, headers: h, body: encoded);
         break;
       case 'DELETE':
-        res = await http.delete(uri, headers: h);
+        res = await http.delete(uri, headers: h, body: encoded);
         break;
       default:
         throw ApiException(0, 'Unsupported method $method');
@@ -96,23 +105,37 @@ class ApiClient {
       final msg = data is Map && data['error'] != null
           ? data['error'].toString()
           : 'Request failed (${res.statusCode})';
-      final code = data is Map ? data['code']?.toString() : null;
       throw ApiException(
         res.statusCode,
         msg,
-        code: code,
+        code: data is Map ? data['code']?.toString() : null,
         body: data is Map ? Map<String, dynamic>.from(data) : null,
       );
     }
     return data;
   }
 
+  List<dynamic> _asList(dynamic data, [String? key]) {
+    if (data is List) return data;
+    if (data is Map) {
+      if (key != null && data[key] is List) return data[key] as List;
+      for (final k in ['items', 'data', 'rows', 'results', 'tournaments', 'matches', 'teams', 'posts']) {
+        if (data[k] is List) return data[k] as List;
+      }
+    }
+    return [];
+  }
+
+  Map<String, dynamic> _asMap(dynamic data) =>
+      data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+
+  // ─── Auth ───────────────────────────────────────────────
   Future<Map<String, dynamic>> login(String email, String password) async {
     final data = await request('POST', '/api/auth/login', body: {
       'email': email.trim().toLowerCase(),
       'password': password,
     });
-    final map = Map<String, dynamic>.from(data as Map);
+    final map = _asMap(data);
     final t = map['token']?.toString();
     if (t != null && t.isNotEmpty) await setToken(t);
     return map;
@@ -124,7 +147,7 @@ class ApiClient {
       'password': password,
       if (fullName != null && fullName.isNotEmpty) 'full_name': fullName,
     });
-    final map = Map<String, dynamic>.from(data as Map);
+    final map = _asMap(data);
     final t = map['token']?.toString();
     if (t != null && t.isNotEmpty) await setToken(t);
     return map;
@@ -133,62 +156,161 @@ class ApiClient {
   Future<Map<String, dynamic>?> me() async {
     if (_token == null) return null;
     try {
-      final data = await request('GET', '/api/auth/me');
-      if (data is Map) return Map<String, dynamic>.from(data);
-      return null;
+      return _asMap(await request('GET', '/api/auth/me'));
     } catch (_) {
       return null;
     }
   }
 
+  Future<Map<String, dynamic>> patchMe(Map<String, dynamic> body) async =>
+      _asMap(await request('PATCH', '/api/auth/me', body: body));
+
+  Future<List<dynamic>> myWallet() async =>
+      _asList(await request('GET', '/api/auth/me/wallet'), 'wallets');
+
+  Future<List<dynamic>> myAccolades() async =>
+      _asList(await request('GET', '/api/auth/me/accolades'), 'accolades');
+
+  Future<List<dynamic>> myMatches({int limit = 50}) async =>
+      _asList(await request('GET', '/api/auth/me/matches', query: {'limit': '$limit'}), 'matches');
+
+  Future<List<dynamic>> myTeams() async =>
+      _asList(await request('GET', '/api/auth/me/teams'), 'teams');
+
+  Future<Map<String, dynamic>> myHub() async =>
+      _asMap(await request('GET', '/api/auth/me/hub'));
+
+  Future<List<dynamic>> myWatchlist() async =>
+      _asList(await request('GET', '/api/auth/me/watchlist'), 'watchlist');
+
+  Future<void> watchlistAdd(String tournamentId) async =>
+      request('POST', '/api/auth/me/watchlist/$tournamentId');
+
+  Future<void> watchlistRemove(String tournamentId) async =>
+      request('DELETE', '/api/auth/me/watchlist/$tournamentId');
+
+  Future<Map<String, dynamic>> prizePayoutKyc() async =>
+      _asMap(await request('GET', '/api/auth/me/prize-payout-kyc'));
+
+  Future<Map<String, dynamic>> withdrawalRequest(Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/auth/me/withdrawal-request', body: body));
+
+  Future<void> logout() async {
+    try {
+      await request('POST', '/api/auth/logout');
+    } catch (_) {}
+    await setToken(null);
+  }
+
+  // ─── Public / discovery ──────────────────────────────────
   Future<Map<String, dynamic>> catalog({
     int page = 1,
     int limit = 20,
     String? q,
     String? status,
+    String? game,
   }) async {
-    final query = <String, String>{
-      'page': '$page',
-      'limit': '$limit',
-    };
+    final query = <String, String>{'page': '$page', 'limit': '$limit'};
     if (q != null && q.isNotEmpty) query['q'] = q;
     if (status != null && status.isNotEmpty) query['status'] = status;
-    final data = await request('GET', '/api/public/tournaments', query: query);
-    return Map<String, dynamic>.from(data as Map? ?? {});
+    if (game != null && game.isNotEmpty) query['game'] = game;
+    return _asMap(await request('GET', '/api/public/tournaments', query: query));
   }
 
-  Future<Map<String, dynamic>> tournament(String id) async {
-    final data = await request('GET', '/api/v1/Tournament/$id');
-    if (data is Map) return Map<String, dynamic>.from(data);
-    throw ApiException(404, 'Tournament not found');
-  }
+  Future<Map<String, dynamic>> discoveryDashboard() async =>
+      _asMap(await request('GET', '/api/public/discovery/dashboard'));
 
-  String? tenantId;
-
-  Future<void> loadTenant() async {
-    final p = await SharedPreferences.getInstance();
-    tenantId = p.getString('arena_tenant_id');
-  }
-
-  Future<void> setTenantId(String? id) async {
-    tenantId = id;
-    final p = await SharedPreferences.getInstance();
-    if (id == null || id.isEmpty) {
-      await p.remove('arena_tenant_id');
-    } else {
-      await p.setString('arena_tenant_id', id);
+  Future<Map<String, dynamic>> publicTournament(String id) async {
+    try {
+      return _asMap(await request('GET', '/api/public/tournament/$id'));
+    } catch (_) {
+      return tournament(id);
     }
   }
 
-  Map<String, String> authHeaders({Map<String, String>? extra}) {
-    final h = <String, String>{};
-    if (tenantId != null && tenantId!.isNotEmpty) {
-      h['X-Tenant-ID'] = tenantId!;
-    }
-    if (extra != null) h.addAll(extra);
-    return h;
+  Future<List<dynamic>> publicTournamentTeams(String id) async =>
+      _asList(await request('GET', '/api/public/tournament/$id/teams'), 'teams');
+
+  Future<List<dynamic>> publicTournamentMatches(String id) async =>
+      _asList(await request('GET', '/api/public/tournament/$id/matches'), 'matches');
+
+  Future<List<dynamic>> liveMatches({int limit = 30}) async =>
+      _asList(await request('GET', '/api/public/live-matches', query: {'limit': '$limit'}), 'matches');
+
+  Future<Map<String, dynamic>> matchWatch(String matchId) async =>
+      _asMap(await request('GET', '/api/public/match/$matchId/watch'));
+
+  Future<Map<String, dynamic>> powerRankings({String kind = 'team', int limit = 50}) async =>
+      _asMap(await request('GET', '/api/public/power-rankings', query: {
+        'kind': kind,
+        'limit': '$limit',
+      }));
+
+  Future<Map<String, dynamic>> playerCareer(String email) async =>
+      _asMap(await request('GET', '/api/public/player-career', query: {'email': email}));
+
+  Future<Map<String, dynamic>> teamProfile(String id) async =>
+      _asMap(await request('GET', '/api/public/team/$id'));
+
+  Future<Map<String, dynamic>> opsBoard(String tenantId) async =>
+      _asMap(await request('GET', '/api/public/ops-board', query: {'tenant_id': tenantId}));
+
+  Future<List<dynamic>> publicCommunityPosts({String? tenantId}) async {
+    final q = <String, String>{};
+    if (tenantId != null) q['tenant_id'] = tenantId;
+    return _asList(await request('GET', '/api/public/community/posts', query: q.isEmpty ? null : q), 'posts');
   }
 
+  // ─── CRUD entities ───────────────────────────────────────
+  Future<Map<String, dynamic>> tournament(String id) async =>
+      _asMap(await request('GET', '/api/v1/Tournament/$id'));
+
+  Future<List<dynamic>> listEntities(String entity, {Map<String, String>? query}) async =>
+      _asList(await request('GET', '/api/v1/$entity', query: query ?? {'limit': '100'}));
+
+  Future<Map<String, dynamic>> createEntity(String entity, Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/v1/$entity', body: body));
+
+  Future<Map<String, dynamic>> patchEntity(String entity, String id, Map<String, dynamic> body) async =>
+      _asMap(await request('PATCH', '/api/v1/$entity/$id', body: body));
+
+  Future<void> deleteEntity(String entity, String id) async =>
+      request('DELETE', '/api/v1/$entity/$id');
+
+  Future<List<dynamic>> listGameTemplates() async => listEntities('GameTemplate');
+
+  Future<List<dynamic>> listTournaments({String? status}) async {
+    final q = <String, String>{'limit': '100'};
+    if (status != null) q['status'] = status;
+    return listEntities('Tournament', query: q);
+  }
+
+  Future<List<dynamic>> listTeams({String? tournamentId}) async {
+    final q = <String, String>{'limit': '100'};
+    if (tournamentId != null) q['tournament_id'] = tournamentId;
+    return listEntities('Team', query: q);
+  }
+
+  Future<List<dynamic>> listMatches({String? tournamentId, String? status}) async {
+    final q = <String, String>{'limit': '100'};
+    if (tournamentId != null) q['tournament_id'] = tournamentId;
+    if (status != null) q['status'] = status;
+    return listEntities('Match', query: q);
+  }
+
+  Future<Map<String, dynamic>> getMatch(String id) async =>
+      _asMap(await request('GET', '/api/v1/Match/$id'));
+
+  Future<Map<String, dynamic>> patchMatch(String id, Map<String, dynamic> body) async =>
+      patchEntity('Match', id, body);
+
+  Future<Map<String, dynamic>> createTournament(Map<String, dynamic> body) async =>
+      createEntity('Tournament', body);
+
+  Future<Map<String, dynamic>> updateTournament(String id, Map<String, dynamic> body) async =>
+      patchEntity('Tournament', id, body);
+
+  // ─── Join / payments ─────────────────────────────────────
   Future<Map<String, dynamic>> joinTournament(
     String id, {
     required String mode,
@@ -197,7 +319,6 @@ class ApiClient {
     String? gameId,
     List<Map<String, dynamic>>? roster,
     Map<String, dynamic>? paymentProof,
-    String? paymentMethod,
     String? idempotencyKey,
     String? region,
   }) async {
@@ -208,168 +329,146 @@ class ApiClient {
       if (gameId != null) 'captain_game_id': gameId,
       if (roster != null) 'roster': roster,
       if (paymentProof != null) 'payment_proof': paymentProof,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
       if (region != null) 'region': region,
     };
-    final headers = <String, String>{
-      ...authHeaders(),
-      if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey,
-    };
-    final data = await request(
+    return _asMap(await request(
       'POST',
       '/api/tournaments/$id/join',
       body: body,
-      headers: headers,
-    );
-    return Map<String, dynamic>.from(data as Map? ?? {});
+      headers: {
+        if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey,
+      },
+    ));
   }
 
-  Future<List<dynamic>> listGameTemplates() async {
-    final data = await request(
-      'GET',
-      '/api/v1/GameTemplate',
-      headers: authHeaders(),
-      query: {'limit': '100'},
-    );
-    if (data is List) return data;
-    if (data is Map && data['items'] is List) return data['items'] as List;
-    if (data is Map && data['data'] is List) return data['data'] as List;
-    return [];
-  }
+  Future<Map<String, dynamic>> devSimulateEntry(String tournamentId) async =>
+      _asMap(await request('POST', '/api/payments/dev-simulate-entry', body: {
+        'tournament_id': tournamentId,
+      }));
 
-  Future<Map<String, dynamic>> createTournament(Map<String, dynamic> body) async {
-    final data = await request(
-      'POST',
-      '/api/v1/Tournament',
-      body: body,
-      headers: authHeaders(),
-    );
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
+  Future<Map<String, dynamic>> createStripeCheckout({required String tournamentId}) async =>
+      _asMap(await request('POST', '/api/payments/create-checkout-session', body: {
+        'tournament_id': tournamentId,
+      }));
 
-  Future<Map<String, dynamic>> updateTournament(String id, Map<String, dynamic> body) async {
-    final data = await request(
-      'PATCH',
-      '/api/v1/Tournament/$id',
-      body: body,
-      headers: authHeaders(),
-    );
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
+  Future<Map<String, dynamic>> paystackInitialize({required String tournamentId}) async =>
+      _asMap(await request('POST', '/api/paystack/initialize', body: {
+        'tournament_id': tournamentId,
+      }));
 
-  /// Dev-only: create completed entry_fee ledger without real keys.
-  Future<Map<String, dynamic>> devSimulateEntry(String tournamentId) async {
-    final data = await request('POST', '/api/payments/dev-simulate-entry', body: {
-      'tournament_id': tournamentId,
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
+  Future<Map<String, dynamic>> flutterwaveInitialize({required String tournamentId}) async =>
+      _asMap(await request('POST', '/api/flutterwave/initialize', body: {
+        'tournament_id': tournamentId,
+      }));
 
-  Future<Map<String, dynamic>> createStripeCheckout({
-    required String tournamentId,
-    String? successUrl,
-    String? cancelUrl,
-  }) async {
-    final data = await request('POST', '/api/payments/create-checkout-session', body: {
-      'tournament_id': tournamentId,
-      if (successUrl != null) 'success_url': successUrl,
-      if (cancelUrl != null) 'cancel_url': cancelUrl,
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
+  Future<Map<String, dynamic>> verifyEntryReference(Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/payments/verify-entry-reference', body: body));
 
-  Future<Map<String, dynamic>> paystackInitialize({
-    required String tournamentId,
-    String? callbackUrl,
-  }) async {
-    final data = await request('POST', '/api/paystack/initialize', body: {
-      'tournament_id': tournamentId,
-      if (callbackUrl != null) 'callback_url': callbackUrl,
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
-
-  Future<Map<String, dynamic>> flutterwaveInitialize({
-    required String tournamentId,
-    String? redirectUrl,
-  }) async {
-    final data = await request('POST', '/api/flutterwave/initialize', body: {
-      'tournament_id': tournamentId,
-      if (redirectUrl != null) 'redirect_url': redirectUrl,
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
-
-  Future<Map<String, dynamic>> powerRankings({String kind = 'team', int limit = 50}) async {
-    final data = await request('GET', '/api/public/power-rankings', query: {
-      'kind': kind,
-      'limit': '$limit',
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
-
-  Future<Map<String, dynamic>> matchWatch(String matchId) async {
-    final data = await request('GET', '/api/public/match/$matchId/watch');
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
-
-  Future<List<dynamic>> liveMatches({int limit = 20}) async {
-    final data = await request('GET', '/api/public/live-matches', query: {'limit': '$limit'});
-    if (data is Map && data['matches'] is List) return data['matches'] as List;
-    if (data is List) return data;
-    return [];
-  }
-
-  Future<List<dynamic>> myMatches({int limit = 50}) async {
-    final data = await request('GET', '/api/auth/me/matches', query: {'limit': '$limit'});
-    if (data is Map && data['matches'] is List) return data['matches'] as List;
-    return [];
-  }
-
-  Future<List<dynamic>> myWallet() async {
-    final data = await request('GET', '/api/auth/me/wallet');
-    if (data is Map && data['wallets'] is List) return data['wallets'] as List;
-    return [];
-  }
-
-  Future<List<dynamic>> myAccolades() async {
-    final data = await request('GET', '/api/auth/me/accolades');
-    if (data is Map && data['accolades'] is List) return data['accolades'] as List;
-    return [];
-  }
-
-  Future<Map<String, dynamic>> myHub() async {
-    final data = await request('GET', '/api/auth/me/hub');
-    return Map<String, dynamic>.from(data as Map? ?? {});
-  }
-
+  // ─── Match engine ────────────────────────────────────────
   Future<Map<String, dynamic>> reportResult(
     String matchId, {
     required int scoreA,
     required int scoreB,
     String? povLink,
     String? notes,
+  }) async =>
+      _asMap(await request('POST', '/api/match-engine/matches/$matchId/report-result', body: {
+        'score_a': scoreA,
+        'score_b': scoreB,
+        if (povLink != null && povLink.isNotEmpty) 'pov_link': povLink,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      }));
+
+  Future<List<dynamic>> listMatchReports(String matchId) async =>
+      _asList(await request('GET', '/api/match-engine/matches/$matchId/reports'), 'reports');
+
+  Future<List<dynamic>> listDisputes() async =>
+      _asList(await request('GET', '/api/match-engine/disputes'), 'disputes');
+
+  Future<Map<String, dynamic>> resolveDispute(String matchId, Map<String, dynamic> body) async =>
+      _asMap(await request('PATCH', '/api/match-engine/matches/$matchId/resolve-dispute', body: body));
+
+  Future<Map<String, dynamic>> finalizeTournament(String id, {bool override = false}) async =>
+      _asMap(await request('POST', '/api/match-engine/tournaments/$id/finalize', body: {
+        if (override) 'finalize_override': true,
+      }));
+
+  Future<Map<String, dynamic>> finalizeStatus(String id) async =>
+      _asMap(await request('GET', '/api/match-engine/tournaments/$id/finalize-status'));
+
+  Future<Map<String, dynamic>> getPickem(String tournamentId, {String? tenantOverride}) async {
+    final headers = <String, String>{};
+    if (tenantOverride != null) headers['X-Tenant-ID'] = tenantOverride;
+    return _asMap(await request(
+      'GET',
+      '/api/match-engine/tournaments/$tournamentId/pickem',
+      headers: headers.isEmpty ? null : headers,
+    ));
+  }
+
+  Future<Map<String, dynamic>> putPickem(
+    String tournamentId,
+    Map<String, dynamic> bracketPicks, {
+    String? tenantOverride,
   }) async {
-    final data = await request('POST', '/api/match-engine/matches/$matchId/report-result', body: {
-      'score_a': scoreA,
-      'score_b': scoreB,
-      if (povLink != null && povLink.isNotEmpty) 'pov_link': povLink,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-    });
-    return Map<String, dynamic>.from(data as Map? ?? {});
+    final headers = <String, String>{};
+    if (tenantOverride != null) headers['X-Tenant-ID'] = tenantOverride;
+    return _asMap(await request(
+      'PUT',
+      '/api/match-engine/tournaments/$tournamentId/pickem',
+      body: {'bracket_picks': bracketPicks},
+      headers: headers.isEmpty ? null : headers,
+    ));
   }
 
-  Future<void> registerFcmToken(String token, {String platform = 'mobile'}) async {
-    await request('POST', '/api/notifications/fcm/register', body: {
-      'token': token,
-      'platform': platform,
-    });
+  // ─── Community ───────────────────────────────────────────
+  Future<List<dynamic>> communityPosts({String? scope}) async {
+    final q = <String, String>{};
+    if (scope != null) q['scope'] = scope;
+    return _asList(
+      await request('GET', '/api/community/posts', query: q.isEmpty ? null : q),
+      'posts',
+    );
   }
 
-  Future<void> logout() async {
-    try {
-      await request('POST', '/api/auth/logout');
-    } catch (_) {}
-    await setToken(null);
-  }
+  Future<Map<String, dynamic>> createCommunityPost(Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/community/posts', body: body));
+
+  Future<void> likePost(String id) async => request('POST', '/api/community/posts/$id/like');
+
+  Future<void> unlikePost(String id) async => request('DELETE', '/api/community/posts/$id/like');
+
+  Future<List<dynamic>> postComments(String postId) async =>
+      _asList(await request('GET', '/api/community/posts/$postId/comments'), 'comments');
+
+  Future<Map<String, dynamic>> createComment(String postId, String content) async =>
+      _asMap(await request('POST', '/api/community/posts/$postId/comments', body: {
+        'content': content,
+      }));
+
+  // ─── Streams ─────────────────────────────────────────────
+  Future<List<dynamic>> listStreams(String tournamentId) async =>
+      _asList(await request('GET', '/api/tournaments/$tournamentId/streams'), 'streams');
+
+  Future<Map<String, dynamic>> addStream(String tournamentId, Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/tournaments/$tournamentId/streams', body: body));
+
+  Future<void> deleteStream(String streamId) async => request('DELETE', '/api/streams/$streamId');
+
+  // ─── Free agents ─────────────────────────────────────────
+  Future<List<dynamic>> listFreeAgents() async => listEntities('FreeAgent');
+
+  Future<Map<String, dynamic>> createFreeAgent(Map<String, dynamic> body) async =>
+      createEntity('FreeAgent', body);
+
+  // ─── Notifications ───────────────────────────────────────
+  Future<void> registerFcmToken(String token, {String platform = 'mobile'}) async =>
+      request('POST', '/api/notifications/fcm/register', body: {
+        'token': token,
+        'platform': platform,
+      });
+
+  // ─── Tenant registration ─────────────────────────────────
+  Future<Map<String, dynamic>> registerTenant(Map<String, dynamic> body) async =>
+      _asMap(await request('POST', '/api/tenant-registration', body: body));
 }

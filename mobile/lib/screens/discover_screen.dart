@@ -58,7 +58,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       appBar: AppBar(
         title: const Text('Discover'),
         actions: [
-          if (auth.isOrganizer)
+          if (auth.isLeagueHost)
             IconButton(
               tooltip: 'Create tournament',
               onPressed: () {

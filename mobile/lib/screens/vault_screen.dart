@@ -166,12 +166,60 @@ class _VaultScreenState extends State<VaultScreen> {
                             }),
                           const SizedBox(height: 24),
                           Text(
-                            'Withdrawals and KYC are managed on the web Wallet / Player Vault screens for compliance.',
+                            'Withdraw',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton(
+                            onPressed: wallets.isEmpty ? null : () => _requestWithdraw(),
+                            child: const Text('Request withdrawal'),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'KYC may be required above platform thresholds. Same API as web vault.',
                             style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.4)),
                           ),
                         ],
                       ),
                     ),
     );
+  }
+
+  Future<void> _requestWithdraw() async {
+    if (wallets.isEmpty) return;
+    final first = Map<String, dynamic>.from(wallets.first as Map);
+    final currency = first['currency']?.toString() ?? 'USD';
+    final amountCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Withdraw'),
+        content: TextField(
+          controller: amountCtrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'Amount ($currency)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final amount = num.tryParse(amountCtrl.text.trim());
+    amountCtrl.dispose();
+    if (amount == null || amount <= 0) return;
+    try {
+      await context.read<ApiClient>().withdrawalRequest({
+        'amount': amount,
+        'currency': currency,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Withdrawal requested')));
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 }

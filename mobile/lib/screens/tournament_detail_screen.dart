@@ -4,7 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../services/api_client.dart';
 import '../state/auth_state.dart';
+import '../widgets/arena_ui.dart';
 import 'login_screen.dart';
+import 'report_score_screen.dart';
 
 class _RosterSlot {
   final email = TextEditingController();
@@ -17,6 +19,7 @@ class _RosterSlot {
   }
 }
 
+/// Full tournament surface: overview, join, teams, matches, pick'em, streams, lobby/finalize.
 class TournamentDetailScreen extends StatefulWidget {
   const TournamentDetailScreen({super.key, required this.tournamentId});
   final String tournamentId;
@@ -25,31 +28,43 @@ class TournamentDetailScreen extends StatefulWidget {
   State<TournamentDetailScreen> createState() => _TournamentDetailScreenState();
 }
 
-class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
+class _TournamentDetailScreenState extends State<TournamentDetailScreen> with SingleTickerProviderStateMixin {
   Map<String, dynamic>? t;
+  List<dynamic> teams = [];
+  List<dynamic> matches = [];
+  List<dynamic> streams = [];
+  Map<String, dynamic>? pickem;
   bool loading = true;
   String? error;
   bool joining = false;
-  String joinMode = 'solo'; // solo | team
+  String joinMode = 'solo';
   String payProvider = 'dev';
+  late TabController tabs;
+
   final gameIdCtrl = TextEditingController();
   final regionCtrl = TextEditingController(text: 'global');
   final teamNameCtrl = TextEditingController();
   final tagCtrl = TextEditingController();
   final List<_RosterSlot> rosterSlots = [];
+  final streamLabel = TextEditingController(text: 'Main');
+  final streamUrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    tabs = TabController(length: 5, vsync: this);
     _load();
   }
 
   @override
   void dispose() {
+    tabs.dispose();
     gameIdCtrl.dispose();
     regionCtrl.dispose();
     teamNameCtrl.dispose();
     tagCtrl.dispose();
+    streamLabel.dispose();
+    streamUrl.dispose();
     for (final s in rosterSlots) {
       s.dispose();
     }
@@ -71,11 +86,11 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
   }
 
   void _ensureRosterSlots() {
-    final needTeammates = joinMode == 'team' ? (rosterSize > 1 ? rosterSize - 1 : 0) : 0;
-    while (rosterSlots.length < needTeammates) {
+    final need = joinMode == 'team' && rosterSize > 1 ? rosterSize - 1 : 0;
+    while (rosterSlots.length < need) {
       rosterSlots.add(_RosterSlot());
     }
-    while (rosterSlots.length > needTeammates) {
+    while (rosterSlots.length > need) {
       rosterSlots.removeLast().dispose();
     }
   }
@@ -85,27 +100,48 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
       loading = true;
       error = null;
     });
+    final api = context.read<ApiClient>();
     try {
-      final api = context.read<ApiClient>();
       Map<String, dynamic> row;
       try {
-        row = await api.tournament(widget.tournamentId);
+        row = await api.publicTournament(widget.tournamentId);
       } catch (_) {
-        final cat = await api.catalog(limit: 100);
-        final list = (cat['items'] ?? cat['tournaments'] ?? cat['data'] ?? []) as List? ?? [];
-        Map<String, dynamic>? found;
-        for (final e in list) {
-          if (e is Map && '${e['id']}' == widget.tournamentId) {
-            found = Map<String, dynamic>.from(e);
-            break;
-          }
-        }
-        if (found == null) throw ApiException(404, 'Tournament not found');
-        row = found;
+        row = await api.tournament(widget.tournamentId);
       }
+      List<dynamic> teamList = [];
+      List<dynamic> matchList = [];
+      List<dynamic> streamList = [];
+      Map<String, dynamic>? pick;
+      try {
+        teamList = await api.publicTournamentTeams(widget.tournamentId);
+      } catch (_) {
+        try {
+          teamList = await api.listTeams(tournamentId: widget.tournamentId);
+        } catch (_) {}
+      }
+      try {
+        matchList = await api.publicTournamentMatches(widget.tournamentId);
+      } catch (_) {
+        try {
+          matchList = await api.listMatches(tournamentId: widget.tournamentId);
+        } catch (_) {}
+      }
+      try {
+        streamList = await api.listStreams(widget.tournamentId);
+      } catch (_) {}
+      try {
+        pick = await api.getPickem(
+          widget.tournamentId,
+          tenantOverride: row['tenant_id']?.toString(),
+        );
+      } catch (_) {}
+
       setState(() {
         t = row;
-        // Prefer team mode when roster > 1
+        teams = teamList;
+        matches = matchList;
+        streams = streamList;
+        pickem = pick;
         if (rosterSize > 1) joinMode = 'team';
         _ensureRosterSlots();
         loading = false;
@@ -127,78 +163,38 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     return ok == true;
   }
 
-  Future<Map<String, dynamic>?> _obtainPaymentProof() async {
+  Future<Map<String, dynamic>?> _paymentProof() async {
     if (!requiresPayment) return null;
     final api = context.read<ApiClient>();
     final tid = widget.tournamentId;
-
     if (payProvider == 'wallet') {
       return {'method': 'wallet', 'provider': 'wallet', 'reference': 'wallet'};
     }
-
     if (payProvider == 'dev') {
       final sim = await api.devSimulateEntry(tid);
-      final ref = sim['reference']?.toString() ??
-          sim['ledger']?['reference']?.toString() ??
-          sim['payment']?['reference']?.toString() ??
-          sim['id']?.toString();
-      if (ref == null || ref.isEmpty) {
-        throw ApiException(500, 'Dev simulate entry did not return a reference: $sim');
-      }
+      final ref = sim['reference']?.toString();
+      if (ref == null) throw ApiException(500, 'No dev reference');
       return {'provider': 'dev', 'reference': ref};
     }
-
+    Map<String, dynamic> init;
+    String? url;
+    String? ref;
     if (payProvider == 'stripe') {
-      final session = await api.createStripeCheckout(tournamentId: tid);
-      final url = session['url']?.toString() ?? session['checkout_url']?.toString();
-      final ref = session['id']?.toString() ?? session['session_id']?.toString();
-      if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (ref == null) throw ApiException(400, 'No Stripe session id returned');
-      return {'provider': 'stripe', 'reference': ref};
+      init = await api.createStripeCheckout(tournamentId: tid);
+      url = init['url']?.toString();
+      ref = init['id']?.toString();
+    } else if (payProvider == 'paystack') {
+      init = await api.paystackInitialize(tournamentId: tid);
+      url = init['authorization_url']?.toString() ?? init['data']?['authorization_url']?.toString();
+      ref = init['reference']?.toString() ?? init['data']?['reference']?.toString();
+    } else {
+      init = await api.flutterwaveInitialize(tournamentId: tid);
+      url = init['link']?.toString() ?? init['data']?['link']?.toString();
+      ref = init['tx_ref']?.toString() ?? init['data']?['tx_ref']?.toString();
     }
-
-    if (payProvider == 'paystack') {
-      final init = await api.paystackInitialize(tournamentId: tid);
-      final url = init['authorization_url']?.toString() ??
-          init['data']?['authorization_url']?.toString();
-      final ref = init['reference']?.toString() ?? init['data']?['reference']?.toString();
-      if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (ref == null) throw ApiException(400, 'No Paystack reference');
-      return {'provider': 'paystack', 'reference': ref};
-    }
-
-    if (payProvider == 'flutterwave') {
-      final init = await api.flutterwaveInitialize(tournamentId: tid);
-      final url = init['link']?.toString() ?? init['data']?['link']?.toString();
-      final ref = init['tx_ref']?.toString() ?? init['data']?['tx_ref']?.toString();
-      if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (ref == null) throw ApiException(400, 'No Flutterwave tx_ref');
-      return {'provider': 'flutterwave', 'reference': ref};
-    }
-
-    return null;
-  }
-
-  List<Map<String, dynamic>>? _buildRoster() {
-    if (joinMode != 'team' || rosterSize <= 1) return null;
-    final out = <Map<String, dynamic>>[];
-    for (var i = 0; i < rosterSlots.length; i++) {
-      final s = rosterSlots[i];
-      final email = s.email.text.trim().toLowerCase();
-      final gid = s.gameId.text.trim();
-      if (email.isEmpty) {
-        throw ApiException(400, 'Teammate ${i + 1}: email required');
-      }
-      if (gid.isEmpty && (t?['require_game_handle'] == true || rosterSize > 1)) {
-        throw ApiException(400, 'Teammate ${i + 1}: game ID required');
-      }
-      out.add({
-        'player_email': email,
-        'player_name': s.name.text.trim().isEmpty ? email.split('@').first : s.name.text.trim(),
-        'game_id': gid,
-      });
-    }
-    return out;
+    if (url != null) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (ref == null) throw ApiException(400, 'No payment reference');
+    return {'provider': payProvider, 'reference': ref};
   }
 
   Future<void> _join() async {
@@ -208,24 +204,26 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => joining = true);
     try {
-      Map<String, dynamic>? proof;
-      if (requiresPayment) proof = await _obtainPaymentProof();
-
+      final proof = await _paymentProof();
       List<Map<String, dynamic>>? roster;
-      try {
-        roster = _buildRoster();
-      } on ApiException catch (e) {
-        messenger.showSnackBar(SnackBar(content: Text(e.message)));
-        return;
-      }
-
-      if (joinMode == 'team') {
+      if (joinMode == 'team' && rosterSize > 1) {
+        roster = [];
+        for (var i = 0; i < rosterSlots.length; i++) {
+          final s = rosterSlots[i];
+          final email = s.email.text.trim().toLowerCase();
+          final gid = s.gameId.text.trim();
+          if (email.isEmpty) throw ApiException(400, 'Teammate ${i + 1} email required');
+          if (gid.isEmpty) throw ApiException(400, 'Teammate ${i + 1} game ID required');
+          roster.add({
+            'player_email': email,
+            'player_name': s.name.text.trim().isEmpty ? email.split('@').first : s.name.text.trim(),
+            'game_id': gid,
+          });
+        }
         if (teamNameCtrl.text.trim().isEmpty || tagCtrl.text.trim().isEmpty) {
-          messenger.showSnackBar(const SnackBar(content: Text('Team name and tag required')));
-          return;
+          throw ApiException(400, 'Team name and tag required');
         }
       }
-
       await api.joinTournament(
         widget.tournamentId,
         mode: joinMode,
@@ -237,216 +235,353 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
         paymentProof: proof,
         idempotencyKey: const Uuid().v4(),
       );
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Joined tournament')));
+      messenger.showSnackBar(const SnackBar(content: Text('Joined')));
       await _load();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.status == 503 && requiresPayment) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('${e.message} — try Dev simulate'),
-            action: SnackBarAction(label: 'Use Dev', onPressed: () => setState(() => payProvider = 'dev')),
-          ),
-        );
-      } else {
-        messenger.showSnackBar(SnackBar(content: Text(e.message)));
-      }
     } catch (e) {
-      if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => joining = false);
     }
   }
 
+  Future<void> _watchlistToggle() async {
+    if (!await _ensureAuth()) return;
+    try {
+      await context.read<ApiClient>().watchlistAdd(widget.tournamentId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Added to watchlist')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _finalize() async {
+    try {
+      await context.read<ApiClient>().finalizeTournament(widget.tournamentId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Finalize enqueued')));
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _addStream() async {
+    if (streamUrl.text.trim().isEmpty) return;
+    try {
+      await context.read<ApiClient>().addStream(widget.tournamentId, {
+        'label': streamLabel.text.trim().isEmpty ? 'Stream' : streamLabel.text.trim(),
+        'stream_url': streamUrl.text.trim(),
+        'is_primary': streams.isEmpty,
+      });
+      streamUrl.clear();
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _savePick(String matchId, String teamId) async {
+    final current = Map<String, dynamic>.from(pickem?['prediction']?['bracket_picks'] as Map? ?? {});
+    current[matchId] = teamId;
+    try {
+      await context.read<ApiClient>().putPickem(
+            widget.tournamentId,
+            current,
+            tenantOverride: t?['tenant_id']?.toString(),
+          );
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    if (loading) return const Scaffold(body: LoadingBody(label: 'Loading tournament…'));
     if (error != null || t == null) {
-      return Scaffold(appBar: AppBar(), body: Center(child: Text(error ?? 'Not found')));
+      return Scaffold(
+        appBar: AppBar(),
+        body: EmptyState(message: error ?? 'Not found', actionLabel: 'Retry', onAction: _load),
+      );
     }
     final name = '${t!['name'] ?? 'Tournament'}';
-    final status = '${t!['status'] ?? ''}'.replaceAll('_', ' ');
-    final fee = t!['entry_fee'];
-    final prize = t!['prize_pool'];
-    final game = t!['game_title'] ?? t!['game'] ?? '';
-    final open = '${t!['status']}' == 'registration_open' ||
-        status.toLowerCase().contains('registration open');
-    final teamAllowed = rosterSize > 1;
+    final status = '${t!['status'] ?? ''}';
+    final open = status == 'registration_open';
+    final auth = context.watch<AuthState>();
 
     return Scaffold(
-      appBar: AppBar(title: Text(name)),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(name, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Chip(label: Text(status)),
-              if (game.toString().isNotEmpty) Chip(label: Text('$game')),
-              Chip(label: Text('Roster size: $rosterSize')),
-              if (requiresPayment)
-                Chip(label: Text('Paid: $fee ${t!['currency'] ?? ''}'))
-              else
-                const Chip(label: Text('Free entry')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _meta('Prize pool', prize == null ? 'TBD' : '$prize'),
-          if (t!['elo_tier'] != null) _meta('Elo tier', '${t!['elo_tier']}'),
-          if (t!['allowed_regions'] is List && (t!['allowed_regions'] as List).isNotEmpty)
-            _meta('Regions', (t!['allowed_regions'] as List).join(', ')),
-          if (t!['description'] != null) ...[
-            const SizedBox(height: 12),
-            Text('${t!['description']}'),
+      appBar: AppBar(
+        title: Text(name),
+        actions: [
+          IconButton(onPressed: _watchlistToggle, icon: const Icon(Icons.bookmark_add_outlined)),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
+        bottom: TabBar(
+          controller: tabs,
+          isScrollable: true,
+          tabs: const [
+            Tab(text: 'Overview'),
+            Tab(text: 'Teams'),
+            Tab(text: 'Matches'),
+            Tab(text: "Pick'Em"),
+            Tab(text: 'Streams'),
           ],
-          const SizedBox(height: 20),
-          if (open) ...[
-            Text('Join as', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: [
-                const ButtonSegment(value: 'solo', label: Text('Solo')),
-                if (teamAllowed) const ButtonSegment(value: 'team', label: Text('Team')),
-              ],
-              selected: {joinMode == 'team' && teamAllowed ? 'team' : 'solo'},
-              onSelectionChanged: (s) {
-                setState(() {
-                  joinMode = s.first;
-                  _ensureRosterSlots();
-                });
-              },
-            ),
-            if (joinMode == 'team' && teamAllowed) ...[
-              const SizedBox(height: 16),
-              TextField(
-                controller: teamNameCtrl,
-                decoration: const InputDecoration(labelText: 'Team name *'),
+        ),
+      ),
+      body: TabBarView(
+        controller: tabs,
+        children: [
+          // Overview + join
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusChip(status),
+                  Chip(label: Text('Roster $rosterSize')),
+                  if (requiresPayment)
+                    Chip(label: Text('Fee ${t!['entry_fee']} ${t!['currency'] ?? ''}'))
+                  else
+                    const Chip(label: Text('Free')),
+                  if (t!['elo_tier'] != null) Chip(label: Text('Elo ${t!['elo_tier']}')),
+                ],
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: tagCtrl,
-                decoration: const InputDecoration(labelText: 'Tag (≤5) *', hintText: 'ACE'),
-                maxLength: 5,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Captain game ID + teammates (roster size $rosterSize = you + ${rosterSize - 1})',
-                style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.55)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: gameIdCtrl,
-                decoration: const InputDecoration(labelText: 'Your (captain) game ID'),
-              ),
-              ...List.generate(rosterSlots.length, (i) {
-                final s = rosterSlots[i];
-                return Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+              Text('Prize: ${t!['prize_pool'] ?? 'TBD'} · Format: ${t!['format'] ?? '—'}'),
+              if (t!['description'] != null) ...[
+                const SizedBox(height: 8),
+                Text('${t!['description']}'),
+              ],
+              if (auth.isLeagueHost) ...[
+                const SizedBox(height: 12),
+                OutlinedButton(onPressed: _finalize, child: const Text('Finalize tournament')),
+              ],
+              const SizedBox(height: 20),
+              if (open) ...[
+                const SectionHeader('Join'),
+                SegmentedButton<String>(
+                  segments: [
+                    const ButtonSegment(value: 'solo', label: Text('Solo')),
+                    if (rosterSize > 1) const ButtonSegment(value: 'team', label: Text('Team')),
+                  ],
+                  selected: {joinMode == 'team' && rosterSize > 1 ? 'team' : 'solo'},
+                  onSelectionChanged: (s) => setState(() {
+                    joinMode = s.first;
+                    _ensureRosterSlots();
+                  }),
+                ),
+                const SizedBox(height: 12),
+                if (joinMode == 'team' && rosterSize > 1) ...[
+                  TextField(controller: teamNameCtrl, decoration: const InputDecoration(labelText: 'Team name')),
+                  const SizedBox(height: 8),
+                  TextField(controller: tagCtrl, decoration: const InputDecoration(labelText: 'Tag'), maxLength: 5),
+                  TextField(controller: gameIdCtrl, decoration: const InputDecoration(labelText: 'Captain game ID')),
+                  ...List.generate(rosterSlots.length, (i) {
+                    final s = rosterSlots[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: ArenaCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Teammate ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            TextField(controller: s.email, decoration: const InputDecoration(labelText: 'Email')),
+                            TextField(controller: s.name, decoration: const InputDecoration(labelText: 'Name')),
+                            TextField(controller: s.gameId, decoration: const InputDecoration(labelText: 'Game ID')),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ] else
+                  TextField(controller: gameIdCtrl, decoration: const InputDecoration(labelText: 'Game ID')),
+                const SizedBox(height: 8),
+                TextField(controller: regionCtrl, decoration: const InputDecoration(labelText: 'Region')),
+                if (requiresPayment) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final p in ['dev', 'wallet', 'stripe', 'paystack', 'flutterwave'])
+                        ChoiceChip(
+                          label: Text(p),
+                          selected: payProvider == p,
+                          onSelected: (_) => setState(() => payProvider = p),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: joining ? null : _join,
+                  child: joining
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Text(joinMode == 'team' ? 'JOIN TEAM' : 'JOIN SOLO'),
+                ),
+              ] else
+                Text('Registration closed', style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+            ],
+          ),
+          // Teams
+          teams.isEmpty
+              ? const EmptyState(message: 'No teams registered yet')
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: teams.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final team = Map<String, dynamic>.from(teams[i] as Map);
+                    return ArenaCard(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${team['name']} [${team['tag']}]', style: const TextStyle(fontWeight: FontWeight.w800)),
+                                Text('Seed ${team['seed'] ?? '—'} · Elo ${team['elo'] ?? '—'}',
+                                    style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.5))),
+                              ],
+                            ),
+                          ),
+                          StatusChip('${team['status'] ?? 'registered'}'),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+          // Matches
+          matches.isEmpty
+              ? const EmptyState(message: 'Bracket not generated yet')
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: matches.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final m = Map<String, dynamic>.from(matches[i] as Map);
+                    final id = m['id']?.toString() ?? '';
+                    return ArenaCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Teammate ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: s.email,
-                            decoration: const InputDecoration(labelText: 'Email *'),
-                            keyboardType: TextInputType.emailAddress,
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: s.name,
-                            decoration: const InputDecoration(labelText: 'Display name'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: s.gameId,
-                            decoration: const InputDecoration(labelText: 'Game ID *'),
-                          ),
+                          Text('R${m['round'] ?? '?'} · ${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
+                              style: const TextStyle(fontWeight: FontWeight.w800)),
+                          Text('${m['score_a'] ?? 0} – ${m['score_b'] ?? 0}'),
+                          StatusChip('${m['status'] ?? ''}'),
+                          if (['in_progress', 'checked_in', 'check_in_open'].contains('${m['status']}'))
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ReportScoreScreen(
+                                    matchId: id,
+                                    teamA: '${m['team_a_name'] ?? 'A'}',
+                                    teamB: '${m['team_b_name'] ?? 'B'}',
+                                  ),
+                                ),
+                              ),
+                              child: const Text('Report score'),
+                            ),
                         ],
                       ),
+                    );
+                  },
+                ),
+          // Pick'Em
+          pickem == null
+              ? const EmptyState(message: "Pick'Em not available for this phase")
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    Text(
+                      pickem!['windowOpen'] == true ? 'Window open — tap a team to pick' : 'Window closed / locked',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    ...((pickem!['matches'] as List?) ?? []).map((raw) {
+                      final m = Map<String, dynamic>.from(raw as Map);
+                      final mid = m['id']?.toString() ?? '';
+                      final picks = Map<String, dynamic>.from(
+                        pickem?['prediction']?['bracket_picks'] as Map? ?? {},
+                      );
+                      final chosen = picks[mid]?.toString();
+                      return ArenaCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}'),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: Text('${m['team_a_name'] ?? 'A'}'),
+                                  selected: chosen == m['team_a_id']?.toString(),
+                                  onSelected: pickem!['windowOpen'] == true && m['team_a_id'] != null
+                                      ? (_) => _savePick(mid, m['team_a_id'].toString())
+                                      : null,
+                                ),
+                                ChoiceChip(
+                                  label: Text('${m['team_b_name'] ?? 'B'}'),
+                                  selected: chosen == m['team_b_id']?.toString(),
+                                  onSelected: pickem!['windowOpen'] == true && m['team_b_id'] != null
+                                      ? (_) => _savePick(mid, m['team_b_id'].toString())
+                                      : null,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    if ((pickem!['leaderboard'] as List?)?.isNotEmpty == true) ...[
+                      const SizedBox(height: 16),
+                      const SectionHeader('Leaderboard'),
+                      ...(pickem!['leaderboard'] as List).take(10).map((row) {
+                        final r = Map<String, dynamic>.from(row as Map);
+                        return ListTile(
+                          dense: true,
+                          title: Text('${r['email'] ?? r['user'] ?? 'Player'}'),
+                          trailing: Text('${r['score'] ?? r['points'] ?? 0}'),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+          // Streams
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (streams.isEmpty)
+                const Text('No multi-stream rows — tournament stream_url may still work on Watch.'),
+              ...streams.map((s) {
+                final m = Map<String, dynamic>.from(s as Map);
+                return ListTile(
+                  title: Text('${m['label'] ?? 'Stream'}'),
+                  subtitle: Text('${m['stream_url']}'),
+                  trailing: m['is_primary'] == true ? const Icon(Icons.star, color: ArenaColors.cyan) : null,
+                  onTap: () {
+                    final u = m['stream_url']?.toString();
+                    if (u != null) launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+                  },
                 );
               }),
-            ] else ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: gameIdCtrl,
-                decoration: const InputDecoration(labelText: 'In-game ID (if required)'),
-              ),
+              if (auth.isLeagueHost) ...[
+                const SizedBox(height: 16),
+                const SectionHeader('Add broadcast'),
+                TextField(controller: streamLabel, decoration: const InputDecoration(labelText: 'Label')),
+                TextField(controller: streamUrl, decoration: const InputDecoration(labelText: 'URL')),
+                const SizedBox(height: 8),
+                ElevatedButton(onPressed: _addStream, child: const Text('Add stream')),
+              ],
             ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: regionCtrl,
-              decoration: const InputDecoration(labelText: 'Your region', hintText: 'global, us, eu…'),
-            ),
-            if (requiresPayment) ...[
-              const SizedBox(height: 16),
-              Text('Payment', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final p in [
-                    ('dev', 'Dev'),
-                    ('wallet', 'Wallet'),
-                    ('stripe', 'Stripe'),
-                    ('paystack', 'Paystack'),
-                    ('flutterwave', 'FW'),
-                  ])
-                    ChoiceChip(
-                      label: Text(p.$2),
-                      selected: payProvider == p.$1,
-                      onSelected: (_) => setState(() => payProvider = p.$1),
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: joining ? null : _join,
-              child: joining
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      joinMode == 'team'
-                          ? (requiresPayment ? 'PAY & JOIN TEAM' : 'JOIN AS TEAM')
-                          : (requiresPayment ? 'PAY & JOIN SOLO' : 'JOIN SOLO'),
-                    ),
-            ),
-          ] else
-            Text(
-              'Registration is not open',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _meta(String k, String v) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(k, style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
           ),
-          Expanded(child: Text(v, style: const TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );

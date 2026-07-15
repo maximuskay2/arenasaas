@@ -3,15 +3,15 @@ import 'package:provider/provider.dart';
 import 'services/api_client.dart';
 import 'services/push_service.dart';
 import 'state/auth_state.dart';
+import 'state/hub_state.dart';
 import 'theme.dart';
+import 'screens/home_screen.dart';
 import 'screens/discover_screen.dart';
-import 'screens/live_screen.dart';
 import 'screens/my_matches_screen.dart';
-import 'screens/rankings_screen.dart';
-import 'screens/vault_screen.dart';
-import 'screens/profile_screen.dart';
-import 'screens/create_tournament_screen.dart';
+import 'screens/community_screen.dart';
+import 'screens/more_screen.dart';
 import 'screens/tournament_detail_screen.dart';
+import 'screens/create_tournament_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,10 +25,15 @@ class ArenaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = ApiClient();
     final push = PushService(api);
+    final hub = HubState();
     return MultiProvider(
       providers: [
         Provider<ApiClient>.value(value: api),
         Provider<PushService>.value(value: push),
+        ChangeNotifierProvider(create: (_) {
+          hub.load();
+          return hub;
+        }),
         ChangeNotifierProvider(create: (_) => AuthState(api, push: push)..bootstrap()),
       ],
       child: MaterialApp(
@@ -46,7 +51,7 @@ class ArenaApp extends StatelessWidget {
                 settings: settings,
               );
             }
-            if (segs.length >= 1 && segs[0] == 'create') {
+            if (segs.isNotEmpty && segs[0] == 'create') {
               return MaterialPageRoute(
                 builder: (_) => const CreateTournamentScreen(),
                 settings: settings,
@@ -61,12 +66,6 @@ class ArenaApp extends StatelessWidget {
                 settings: settings,
               );
             }
-            if (u.pathSegments.length >= 2 && u.pathSegments[0] == 'tournament') {
-              return MaterialPageRoute(
-                builder: (_) => TournamentDetailScreen(tournamentId: u.pathSegments[1]),
-                settings: settings,
-              );
-            }
           }
           return null;
         },
@@ -76,6 +75,7 @@ class ArenaApp extends StatelessWidget {
   }
 }
 
+/// Primary shell mirrors web sidebar sections: Home, Discover, Matches, Community, More.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -86,41 +86,39 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
 
+  static const _pages = [
+    HomeScreen(),
+    DiscoverScreen(),
+    MyMatchesScreen(),
+    CommunityScreen(),
+    MoreScreen(),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
-    final pages = <Widget>[
-      const DiscoverScreen(),
-      const MyMatchesScreen(),
-      const LiveScreen(),
-      const RankingsScreen(),
-      const VaultScreen(),
-      const ProfileScreen(),
-    ];
-
     return Scaffold(
-      floatingActionButton: auth.isOrganizer
-          ? FloatingActionButton.extended(
+      // League organizers only — platform God-view admin stays on web
+      floatingActionButton: auth.isLeagueHost
+          ? FloatingActionButton(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const CreateTournamentScreen()),
                 );
               },
-              icon: const Icon(Icons.add),
-              label: const Text('Create'),
+              child: const Icon(Icons.add),
             )
           : null,
-      body: IndexedStack(index: index, children: pages),
+      body: IndexedStack(index: index, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),
         destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
           NavigationDestination(icon: Icon(Icons.sports_esports_outlined), selectedIcon: Icon(Icons.sports_esports), label: 'Matches'),
-          NavigationDestination(icon: Icon(Icons.sensors_outlined), selectedIcon: Icon(Icons.sensors), label: 'Live'),
-          NavigationDestination(icon: Icon(Icons.leaderboard_outlined), selectedIcon: Icon(Icons.leaderboard), label: 'Rank'),
-          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Vault'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'You'),
+          NavigationDestination(icon: Icon(Icons.forum_outlined), selectedIcon: Icon(Icons.forum), label: 'Social'),
+          NavigationDestination(icon: Icon(Icons.menu), selectedIcon: Icon(Icons.menu_open), label: 'More'),
         ],
       ),
     );

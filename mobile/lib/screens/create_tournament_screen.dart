@@ -81,9 +81,16 @@ class _CreateTournamentScreenState extends State<CreateTournamentScreen> {
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
       return;
     }
-    if (!auth.isOrganizer && auth.user?['role'] != 'admin') {
+    // Platform admin (Central Station) is web-only; require league host membership.
+    if (!auth.isLeagueHost) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Organizer role / tenant membership required')),
+        SnackBar(
+          content: Text(
+            auth.isPlatformAdmin
+                ? 'Platform admin: create platform-wide config on web. For a league event, use a tenant organizer account.'
+                : 'Organizer role / tenant membership required',
+          ),
+        ),
       );
       return;
     }
