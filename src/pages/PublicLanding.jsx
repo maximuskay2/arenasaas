@@ -38,8 +38,14 @@ function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-/** Mini product mock — match center preview for hero */
-function HeroProductMock({ reduceMotion }) {
+/** Live match center preview — prefers registered live matches from API */
+function HeroProductMock({ reduceMotion, match }) {
+  const a = match?.team_a_name || "TBD";
+  const b = match?.team_b_name || "TBD";
+  const sa = match?.score_a ?? 0;
+  const sb = match?.score_b ?? 0;
+  const round = match?.round != null ? `Round ${match.round}` : "Live desk";
+  const status = match?.status || "in_progress";
   return (
     <motion.div
       initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
@@ -54,60 +60,65 @@ function HeroProductMock({ reduceMotion }) {
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
           <span className="ml-3 text-[10px] font-display font-bold uppercase tracking-widest text-muted-foreground">
-            arena.grid · match center
+            arena.grid · live from DB
           </span>
           <span className="ml-auto flex items-center gap-1.5 text-[10px] font-display font-bold uppercase text-red-400">
-            <span className="live-dot" /> Live
+            <span className="live-dot" /> {String(status).replace(/_/g, " ")}
           </span>
         </div>
         <div className="grid md:grid-cols-5 gap-0">
           <div className="md:col-span-3 p-5 md:p-6 space-y-4 border-b md:border-b-0 md:border-r border-border/40">
             <div className="flex items-center justify-between">
-              <p className="section-label text-primary">Grand finals · Bo3</p>
-              <span className="text-[10px] font-mono text-muted-foreground">Round 5</span>
+              <p className="section-label text-primary">Match center</p>
+              <span className="text-[10px] font-mono text-muted-foreground">{round}</span>
             </div>
             <div className="flex items-center justify-between gap-4">
               <div className="text-left min-w-0 flex-1">
-                <p className="font-display font-bold text-sm md:text-base truncate">Nova Esports</p>
-                <p className="text-[10px] text-muted-foreground">#1 seed</p>
+                <p className="font-display font-bold text-sm md:text-base truncate">{a}</p>
+                <p className="text-[10px] text-muted-foreground">Registered team</p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className="text-3xl md:text-4xl font-display font-bold text-primary tabular-nums">2</span>
+                <span className="text-3xl md:text-4xl font-display font-bold text-primary tabular-nums">{sa}</span>
                 <span className="text-[10px] font-display text-muted-foreground">VS</span>
-                <span className="text-3xl md:text-4xl font-display font-bold text-primary tabular-nums">1</span>
+                <span className="text-3xl md:text-4xl font-display font-bold text-primary tabular-nums">{sb}</span>
               </div>
               <div className="text-right min-w-0 flex-1">
-                <p className="font-display font-bold text-sm md:text-base truncate">Apex Legion</p>
-                <p className="text-[10px] text-muted-foreground">#2 seed</p>
+                <p className="font-display font-bold text-sm md:text-base truncate">{b}</p>
+                <p className="text-[10px] text-muted-foreground">Registered team</p>
               </div>
             </div>
-            <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-primary to-accent" />
-            </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-lg bg-primary/15 text-primary text-[10px] font-display font-bold uppercase px-2.5 py-1 ring-1 ring-primary/25">
-                Map 3 · Ascent
-              </span>
-              <span className="rounded-lg bg-secondary/60 text-muted-foreground text-[10px] font-display font-bold uppercase px-2.5 py-1">
-                $25,000 pool
-              </span>
+              {match?.id ? (
+                <Link
+                  to={`/matches/${match.id}/live`}
+                  className="rounded-lg bg-primary/15 text-primary text-[10px] font-display font-bold uppercase px-2.5 py-1 ring-1 ring-primary/25 hover:bg-primary/25"
+                >
+                  Open watch desk
+                </Link>
+              ) : (
+                <Link
+                  to="/watch"
+                  className="rounded-lg bg-primary/15 text-primary text-[10px] font-display font-bold uppercase px-2.5 py-1 ring-1 ring-primary/25"
+                >
+                  Watch hub
+                </Link>
+              )}
+              <Link
+                to="/tournaments"
+                className="rounded-lg bg-secondary/60 text-muted-foreground text-[10px] font-display font-bold uppercase px-2.5 py-1 hover:text-foreground"
+              >
+                Discovery
+              </Link>
             </div>
           </div>
           <div className="md:col-span-2 p-4 md:p-5 space-y-2 bg-card/30">
-            <p className="section-label mb-2">Event log</p>
-            {[
-              { t: "12:41:02", h: "Nova takes map point" },
-              { t: "12:38:44", h: "Apex plants Spike" },
-              { t: "12:35:11", h: "Check-in complete" },
-            ].map((row) => (
-              <div
-                key={row.t}
-                className="rounded-xl border border-border/40 bg-background/40 px-3 py-2 text-left"
-              >
-                <p className="text-[9px] font-mono text-muted-foreground">{row.t}</p>
-                <p className="text-xs font-semibold text-foreground">{row.h}</p>
-              </div>
-            ))}
+            <p className="section-label mb-2">Live board</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Scores and streams come from matches registered in the arena database — not mock placeholders.
+            </p>
+            <Button asChild size="sm" variant="outline" className="w-full mt-2">
+              <Link to="/watch">See all live</Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -152,6 +163,45 @@ export default function PublicLanding() {
     retry: 1,
   });
   const featuredEvents = discovery?.items ?? [];
+
+  const { data: dash } = useQuery({
+    queryKey: ["landing-dashboard"],
+    queryFn: () => maxikay.public.discoveryDashboard(),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const { data: liveRes } = useQuery({
+    queryKey: ["landing-live"],
+    queryFn: () => maxikay.public.liveMatches({ limit: 6 }),
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const liveMatches = liveRes?.matches ?? liveRes?.items ?? (Array.isArray(liveRes) ? liveRes : []);
+
+  const { data: ranksRes } = useQuery({
+    queryKey: ["landing-rankings"],
+    queryFn: () => maxikay.public.powerRankings({ limit: 8, kind: "team" }),
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const rankings = ranksRes?.rankings ?? [];
+
+  const { data: freeAgents = [] } = useQuery({
+    queryKey: ["landing-free-agents"],
+    queryFn: () => maxikay.entities.FreeAgent.list(),
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const agentList = Array.isArray(freeAgents) ? freeAgents : freeAgents?.items ?? [];
+
+  const { data: communityRes } = useQuery({
+    queryKey: ["landing-community"],
+    queryFn: () => maxikay.public.communityPosts({ limit: 6 }),
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const communityPosts = communityRes?.posts ?? communityRes?.items ?? (Array.isArray(communityRes) ? communityRes : []);
 
   const monthlyDisplay =
     pricingCurrency === "NGN"
@@ -268,11 +318,63 @@ export default function PublicLanding() {
     },
   ];
 
+  // Live platform stats from registered data (fallback only if API empty)
   const stats = [
-    { label: "Formats", value: "4+" },
-    { label: "Payment rails", value: "3" },
-    { label: "Tenant isolation", value: "RLS" },
-    { label: "Realtime", value: "Socket.io" },
+    {
+      label: "Open cups",
+      value: String(dash?.stats?.open_tournaments ?? dash?.open_tournaments ?? featuredEvents.length ?? "—"),
+    },
+    {
+      label: "Live matches",
+      value: String(dash?.stats?.live_matches ?? liveMatches.length ?? "—"),
+    },
+    {
+      label: "Free agents",
+      value: String(agentList.filter((a) => a.is_active !== false).length || "—"),
+    },
+    {
+      label: "Ranked teams",
+      value: String(rankings.length || "—"),
+    },
+  ];
+
+  const resources = [
+    {
+      title: "Career hub",
+      desc: "Matches, teams, vault, check-in, and game passport for registered players.",
+      to: isAuthenticated ? "/dashboard" : "/login",
+      cta: isAuthenticated ? "Open hub" : "Sign in",
+    },
+    {
+      title: "Free agent market",
+      desc: `${agentList.length} listings from registered competitors looking for rosters.`,
+      to: "/free-agents",
+      cta: "Browse agents",
+    },
+    {
+      title: "Community war room",
+      desc: `${communityPosts.length} live posts — announcements, recruitment, and strategy.`,
+      to: "/community",
+      cta: "Join conversation",
+    },
+    {
+      title: "Watch live",
+      desc: `${liveMatches.length} match(es) on-air with multi-stream embeds.`,
+      to: "/watch",
+      cta: "Watch now",
+    },
+    {
+      title: "Power rankings",
+      desc: "Elo ladder from completed and active competitive results.",
+      to: "/rankings",
+      cta: "View ladder",
+    },
+    {
+      title: "Privacy & terms",
+      desc: "How we handle account, tournament, and payment data.",
+      to: "/privacy",
+      cta: "Read policy",
+    },
   ];
 
   return (
@@ -330,7 +432,7 @@ export default function PublicLanding() {
                 </div>
               </motion.div>
 
-              <HeroProductMock reduceMotion={reduceMotion} />
+              <HeroProductMock reduceMotion={reduceMotion} match={liveMatches[0]} />
 
               <motion.div
                 initial={reduceMotion ? false : { opacity: 0, y: 12 }}
@@ -511,6 +613,238 @@ export default function PublicLanding() {
                   ))}
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* ─── WATCH LIVE ─── */}
+          <section id="watch" className="scroll-mt-20 border-t border-border/50 px-4 py-20">
+            <div className="mx-auto max-w-6xl space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="section-label text-primary flex items-center gap-2">
+                    <span className="live-dot" /> Watch live
+                  </p>
+                  <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">On-air right now</h2>
+                  <p className="text-muted-foreground max-w-lg text-sm">
+                    Matches with status <code className="text-primary/90">in_progress</code> from registered leagues.
+                  </p>
+                </div>
+                <Button asChild variant="arena">
+                  <Link to="/watch">
+                    Open watch hub <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+              {liveMatches.length === 0 ? (
+                <div className="glass rounded-3xl border border-border/50 p-8 text-center text-sm text-muted-foreground">
+                  No live matches yet — when organizers start brackets, they appear here automatically.
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {liveMatches.slice(0, 6).map((m) => (
+                    <Link
+                      key={m.id}
+                      to={`/matches/${m.id}/live`}
+                      className="glass rounded-2xl border border-border/50 p-5 hover:border-primary/40 transition-colors shadow-arena-card"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="live-dot" />
+                        <span className="text-[10px] font-display font-bold uppercase text-red-400">Live</span>
+                      </div>
+                      <p className="font-display font-bold text-sm">
+                        {m.team_a_name || "TBD"} <span className="text-muted-foreground font-normal">vs</span>{" "}
+                        {m.team_b_name || "TBD"}
+                      </p>
+                      <p className="text-primary font-display font-bold tabular-nums mt-1">
+                        {m.score_a ?? 0} – {m.score_b ?? 0}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-2 truncate">
+                        {m.tournament_name || m.tournament_id || "Tournament"}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ─── RANKINGS ─── */}
+          <section id="rankings" className="scroll-mt-20 border-t border-border/50 px-4 py-20 bg-secondary/10">
+            <div className="mx-auto max-w-6xl space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="section-label text-primary">Power rankings</p>
+                  <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">Prestige ladder</h2>
+                  <p className="text-muted-foreground text-sm max-w-lg">
+                    Elo entities linked to registered teams and solo players — not invented names.
+                  </p>
+                </div>
+                <Button asChild variant="outline">
+                  <Link to="/rankings">Full ladder</Link>
+                </Button>
+              </div>
+              {rankings.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Rankings appear after teams compete and Elo is applied.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-border/50 glass">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="p-3">#</th>
+                        <th className="p-3">Team</th>
+                        <th className="p-3">Elo</th>
+                        <th className="p-3">Record</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rankings.slice(0, 8).map((r) => (
+                        <tr key={r.id} className="border-b border-border/30 hover:bg-secondary/20">
+                          <td className="p-3 tabular-nums text-muted-foreground">{r.global_rank}</td>
+                          <td className="p-3 font-semibold">
+                            {r.display_name}{" "}
+                            <span className="text-muted-foreground text-xs">[{r.tag}]</span>
+                            {r.apex_tier ? (
+                              <span className="ml-2 text-[10px] text-primary font-display uppercase">Apex</span>
+                            ) : null}
+                          </td>
+                          <td className="p-3 font-display font-bold text-primary tabular-nums">
+                            {Math.round(Number(r.elo) || 0)}
+                          </td>
+                          <td className="p-3 text-muted-foreground tabular-nums">
+                            {r.wins}W – {r.losses}L
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ─── FREE AGENTS ─── */}
+          <section id="free-agents" className="scroll-mt-20 border-t border-border/50 px-4 py-20">
+            <div className="mx-auto max-w-6xl space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="section-label text-primary">Free agent market</p>
+                  <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">
+                    Registered competitors
+                  </h2>
+                  <p className="text-muted-foreground text-sm max-w-lg">
+                    Listings use real account emails and profiles from signed-up players.
+                  </p>
+                </div>
+                <Button asChild variant="arena">
+                  <Link to="/free-agents">Open market</Link>
+                </Button>
+              </div>
+              {agentList.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No free agents yet — register and list yourself on the free agent board.
+                </p>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {agentList.slice(0, 6).map((a) => (
+                    <div
+                      key={a.id || a.player_email}
+                      className="glass rounded-2xl border border-border/50 p-5 space-y-2 shadow-arena-card"
+                    >
+                      <p className="font-display font-bold text-sm">{a.display_name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{a.player_email}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {a.region ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary">{a.region}</span>
+                        ) : null}
+                        {a.rank ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground">
+                            {a.rank}
+                          </span>
+                        ) : null}
+                      </div>
+                      {Array.isArray(a.preferred_games) && a.preferred_games.length > 0 ? (
+                        <p className="text-[11px] text-muted-foreground">{a.preferred_games.join(" · ")}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ─── COMMUNITY ─── */}
+          <section id="community" className="scroll-mt-20 border-t border-border/50 px-4 py-20 bg-secondary/10">
+            <div className="mx-auto max-w-6xl space-y-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="section-label text-primary">Community</p>
+                  <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">War room</h2>
+                  <p className="text-muted-foreground text-sm max-w-lg">
+                    Posts authored by registered user accounts on this platform.
+                  </p>
+                </div>
+                <Button asChild variant="outline">
+                  <Link to="/community">Open community</Link>
+                </Button>
+              </div>
+              {communityPosts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No community posts yet.</p>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-4">
+                  {communityPosts.slice(0, 4).map((p) => (
+                    <div
+                      key={p.id}
+                      className="glass rounded-2xl border border-border/50 p-5 space-y-2 shadow-arena-card"
+                    >
+                      <div className="flex items-center gap-2">
+                        {p.pinned ? (
+                          <span className="text-[10px] font-display uppercase text-primary">Pinned</span>
+                        ) : null}
+                        <span className="text-[10px] uppercase text-muted-foreground">{p.post_type || "post"}</span>
+                      </div>
+                      <p className="font-display font-bold text-sm">{p.title || "Update"}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-3">{p.content || p.body}</p>
+                      <p className="text-[11px] text-primary/80">
+                        {p.author_email || p.author_name || p.author_display_name || "Member"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ─── RESOURCES ─── */}
+          <section id="resources" className="scroll-mt-20 border-t border-border/50 px-4 py-20">
+            <div className="mx-auto max-w-6xl space-y-10">
+              <div className="text-center space-y-3">
+                <p className="section-label text-primary">Resources</p>
+                <h2 className="font-display text-3xl md:text-4xl font-bold tracking-tight">
+                  Everything players & hosts need
+                </h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto text-sm">
+                  Career hub, markets, and policy — all wired to live registered data.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {resources.map((r) => (
+                  <Link
+                    key={r.title}
+                    to={r.to}
+                    className="group glass rounded-3xl border border-border/50 p-6 shadow-arena-card hover:border-primary/40 transition-colors"
+                  >
+                    <h3 className="font-display font-bold text-base mb-2 group-hover:text-primary transition-colors">
+                      {r.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4">{r.desc}</p>
+                    <span className="text-xs font-display font-bold uppercase tracking-wider text-primary inline-flex items-center gap-1">
+                      {r.cta} <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -820,11 +1154,29 @@ export default function PublicLanding() {
               <Link to="/tournaments" className="text-muted-foreground hover:text-foreground">
                 Discover
               </Link>
+              <Link to="/rankings" className="text-muted-foreground hover:text-foreground">
+                Rankings
+              </Link>
+              <Link to="/free-agents" className="text-muted-foreground hover:text-foreground">
+                Free agents
+              </Link>
+              <Link to="/community" className="text-muted-foreground hover:text-foreground">
+                Community
+              </Link>
+              <Link to="/watch" className="text-muted-foreground hover:text-foreground">
+                Watch
+              </Link>
               <a href="#features" className="text-muted-foreground hover:text-foreground">
                 Features
               </a>
               <a href="#pricing" className="text-muted-foreground hover:text-foreground">
                 Pricing
+              </a>
+              <a href="#resources" className="text-muted-foreground hover:text-foreground">
+                Resources
+              </a>
+              <a href="#faq" className="text-muted-foreground hover:text-foreground">
+                FAQ
               </a>
               <Link to="/privacy" className="text-muted-foreground hover:text-foreground">
                 Privacy

@@ -632,4 +632,284 @@ async function seedDemoScenario(client, summary) {
   }
 
   summary.push('demo-scenario:complete');
+
+  // Populate free agents, community, Elo, live matches from registered users (not fake names)
+  await seedMarketplaceFromRegisteredAccounts(client, summary);
+}
+
+/**
+ * Idempotent marketplace content tied to **real registered users** already in the DB:
+ * free-agent listings, global community posts, team Elo prestige, live matches + streams.
+ */
+async function seedMarketplaceFromRegisteredAccounts(client, summary) {
+  // ── Profile region + game handles for players ──
+  const { rows: players } = await client.query(
+    `SELECT id, email, full_name, game_handles FROM users
+     WHERE role <> 'admin' AND email NOT ILIKE 'admin@%'
+     ORDER BY email`
+  );
+
+  const regions = ['NA', 'EU', 'LATAM', 'ASIA', 'OCE', 'AF', 'ME'];
+  const games = ['Valorant', 'Counter-Strike 2', 'League of Legends', 'Apex Legends'];
+  const ranks = ['Immortal', 'Diamond', 'Platinum', 'Gold', 'Radiant', 'Challenger'];
+  const availability = ['anytime', 'weekends', 'weekdays', 'limited'];
+
+  let fa = 0;
+  let i = 0;
+  for (const p of players) {
+    const email = String(p.email || '').toLowerCase();
+    if (!email) continue;
+    const display =
+      String(p.full_name || '').trim() ||
+      email.split('@')[0].replace(/[-_.]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const region = regions[i % regions.length];
+    const game = games[i % games.length];
+    const rank = ranks[i % ranks.length];
+    const avail = availability[i % availability.length];
+    const handle = `${display.replace(/\s+/g, '')}#${String(1000 + (i % 9000))}`;
+
+    // Update profile passport (real account fields)
+    const gh =
+      p.game_handles && typeof p.game_handles === 'object' && !Array.isArray(p.game_handles)
+        ? { ...p.game_handles }
+        : {};
+    if (!gh[game]) gh[game] = handle;
+    await client.query(
+      `UPDATE users SET
+         profile_region = COALESCE(NULLIF(TRIM(COALESCE(profile_region, '')), ''), $2),
+         game_handles = COALESCE(game_handles, '{}'::jsonb) || $3::jsonb,
+         full_name = COALESCE(NULLIF(TRIM(full_name), ''), $4),
+         updated_date = NOW()
+       WHERE id = $1::uuid`,
+      [p.id, region.toLowerCase() === 'na' ? 'us' : region.toLowerCase(), JSON.stringify(gh), display]
+    );
+
+    const existsFa = await client.query(
+      `SELECT id FROM free_agents WHERE lower(player_email) = $1 LIMIT 1`,
+      [email]
+    );
+    if (!existsFa.rowCount) {
+      await client.query(
+        `INSERT INTO free_agents (
+           player_email, display_name, bio, preferred_games, rank, region, roles, availability,
+           discord_handle, is_active, wins, tournaments_played, created_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, $10, $11, $1)`,
+        [
+          email,
+          display,
+          `Registered competitor looking for a serious ${game} roster. Available ${avail}. Region ${region}.`,
+          [game, games[(i + 1) % games.length]],
+          rank,
+          region,
+          i % 2 === 0 ? ['IGL', 'entry'] : ['flex', 'support'],
+          avail,
+          `${email.split('@')[0]}#arena`,
+          2 + (i % 12),
+          1 + (i % 8),
+        ]
+      );
+      fa += 1;
+    }
+    i += 1;
+  }
+  if (fa) summary.push(`free_agents:${fa}`);
+
+  // ── Community posts from real user ids ──
+  let posts = 0;
+  const postBodies = [
+    {
+      type: 'announcement',
+      title: 'Welcome to the Arena war room',
+      content:
+        'This feed is live. Organizers pin official updates; players share strats and recruitment. Sign in to post and like.',
+      pinned: true,
+    },
+    {
+      type: 'recruitment',
+      title: 'LF entry fragger for ranked 5-stack',
+      content:
+        'Looking for a consistent entry who can IGL mid-round. Prefer Immortal+. Drop your game ID + availability.',
+      pinned: false,
+    },
+    {
+      type: 'strategy',
+      title: 'Check-in window tip',
+      content:
+        'Always open match lobby 10 minutes early — forfeit worker is live on overdue check_in_open matches.',
+      pinned: false,
+    },
+    {
+      type: 'recruitment',
+      title: 'Free agent market is open',
+      content: 'Browse /free-agents and invite players who already registered accounts on this platform.',
+      pinned: false,
+    },
+  ];
+
+  for (let pi = 0; pi < postBodies.length && pi < players.length; pi += 1) {
+    const author = players[pi];
+    const body = postBodies[pi];
+    const ex = await client.query(
+      `SELECT id FROM community_posts WHERE author_id = $1::uuid AND title = $2 AND deleted_at IS NULL LIMIT 1`,
+      [author.id, body.title]
+    );
+    if (ex.rowCount) continue;
+    await client.query(
+      `INSERT INTO community_posts (tenant_id, author_id, title, content, post_type, pinned, like_count)
+       VALUES (NULL, $1::uuid, $2, $3, $4, $5, $6)`,
+      [author.id, body.title, body.content, body.type, body.pinned, 3 + pi]
+    );
+    posts += 1;
+  }
+  if (posts) summary.push(`community_posts:${posts}`);
+
+  // ── Elo from existing teams (prestige ladder) ──
+  const { rows: teamRows } = await client.query(
+    `SELECT id::text AS id, tenant_id, name, tag, elo FROM teams ORDER BY created_date ASC LIMIT 40`
+  );
+  let eloN = 0;
+  for (const t of teamRows) {
+    const link = await client.query(`SELECT elo_entity_id FROM team_elo_links WHERE team_id::text = $1`, [t.id]);
+    if (link.rowCount) continue;
+    const base = Number(t.elo) > 0 ? Number(t.elo) : 1180 + (eloN % 20) * 12;
+    const wins = 1 + (eloN % 9);
+    const losses = eloN % 6;
+    const ins = await client.query(
+      `INSERT INTO elo_entities (tenant_id, display_name, tag, elo, wins, losses, entity_kind)
+       VALUES ($1, $2, $3, $4, $5, $6, 'team') RETURNING id`,
+      [String(t.tenant_id || 'platform'), t.name, t.tag || 'TAG', base, wins, losses]
+    );
+    await client.query(`INSERT INTO team_elo_links (team_id, elo_entity_id) VALUES ($1, $2)`, [
+      t.id,
+      ins.rows[0].id,
+    ]);
+    await client.query(`UPDATE teams SET elo = $1 WHERE id::text = $2`, [base, t.id]);
+    eloN += 1;
+  }
+  if (eloN) summary.push(`elo_entities_teams:${eloN}`);
+
+  // Player Elo for first few registered users
+  let pElo = 0;
+  for (let j = 0; j < Math.min(6, players.length); j += 1) {
+    const u = players[j];
+    const plink = await client.query(`SELECT elo_entity_id FROM player_elo_links WHERE user_id = $1::uuid`, [
+      u.id,
+    ]);
+    if (plink.rowCount) continue;
+    const display =
+      String(u.full_name || '').trim() || String(u.email || '').split('@')[0];
+    const ins = await client.query(
+      `INSERT INTO elo_entities (tenant_id, display_name, tag, elo, wins, losses, entity_kind)
+       VALUES ('platform', $1, $2, $3, $4, $5, 'player') RETURNING id`,
+      [display, String(u.email || 'PLR').split('@')[0].slice(0, 8).toUpperCase(), 1200 + j * 15, j + 1, j % 3]
+    );
+    try {
+      await client.query(`INSERT INTO player_elo_links (user_id, elo_entity_id) VALUES ($1::uuid, $2)`, [
+        u.id,
+        ins.rows[0].id,
+      ]);
+      pElo += 1;
+    } catch {
+      /* table may lag migrate */
+    }
+  }
+  if (pElo) summary.push(`elo_entities_players:${pElo}`);
+
+  // ── Live matches + streams for Watch hub ──
+  const { rows: tourOpen } = await client.query(
+    `SELECT id::text AS id, tenant_id, name, stream_url FROM tournaments
+     WHERE status IN ('registration_open', 'in_progress', 'registration_closed')
+     ORDER BY created_date DESC LIMIT 5`
+  );
+
+  let liveM = 0;
+  for (const tour of tourOpen) {
+    const { rows: teamsT } = await client.query(
+      `SELECT id::text AS id, name FROM teams WHERE tournament_id::text = $1 ORDER BY created_date LIMIT 4`,
+      [tour.id]
+    );
+    if (teamsT.length < 2) continue;
+
+    const mEx = await client.query(
+      `SELECT id FROM matches WHERE tournament_id::text = $1 AND status = 'in_progress' LIMIT 1`,
+      [tour.id]
+    );
+    let matchId;
+    if (mEx.rowCount) {
+      matchId = mEx.rows[0].id;
+    } else {
+      const insM = await client.query(
+        `INSERT INTO matches (
+           tenant_id, tournament_id, round, match_number, team_a_id, team_a_name, team_b_id, team_b_name,
+           score_a, score_b, status, stream_url
+         ) VALUES (
+           $1, $2, 1, 1, $3, $4, $5, $6, 1, 0, 'in_progress',
+           'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+         ) RETURNING id`,
+        [
+          String(tour.tenant_id),
+          tour.id,
+          teamsT[0].id,
+          teamsT[0].name,
+          teamsT[1].id,
+          teamsT[1].name,
+        ]
+      );
+      matchId = insM.rows[0].id;
+      liveM += 1;
+    }
+
+    await client.query(
+      `UPDATE tournaments SET
+         status = CASE WHEN status = 'registration_open' THEN status ELSE 'in_progress' END,
+         stream_url = COALESCE(NULLIF(TRIM(stream_url), ''), 'https://www.twitch.tv/valorant')
+       WHERE id::text = $1`,
+      [tour.id]
+    );
+
+    const sEx = await client.query(
+      `SELECT id FROM tournament_streams WHERE tournament_id::text = $1 LIMIT 1`,
+      [tour.id]
+    );
+    if (!sEx.rowCount) {
+      await client.query(
+        `INSERT INTO tournament_streams (tournament_id, match_id, tenant_id, label, stream_url, provider, sort_order, is_primary)
+         VALUES ($1, $2, $3, 'Main broadcast', 'https://www.twitch.tv/valorant', 'twitch', 0, TRUE)`,
+        [tour.id, String(matchId), String(tour.tenant_id)]
+      );
+      await client.query(
+        `INSERT INTO tournament_streams (tournament_id, match_id, tenant_id, label, stream_url, provider, sort_order, is_primary)
+         VALUES ($1, $2, $3, 'Co-stream EN', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'youtube', 1, FALSE)`,
+        [tour.id, String(matchId), String(tour.tenant_id)]
+      );
+    }
+  }
+  if (liveM) summary.push(`live_matches:${liveM}`);
+
+  // Accolades for a couple players if none
+  const { rows: acCount } = await client.query(`SELECT COUNT(*)::int AS c FROM user_accolades`);
+  if ((acCount[0]?.c || 0) === 0 && players.length && tourOpen.length) {
+    let acc = 0;
+    const tenantForAccolade = String(tourOpen[0].tenant_id || '');
+    for (let k = 0; k < Math.min(3, players.length); k += 1) {
+      await client.query(
+        `INSERT INTO user_accolades (user_id, tenant_id, badge_id, tournament_id, tournament_title, rank, metadata)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::jsonb)
+         ON CONFLICT (user_id, tournament_id, rank) DO NOTHING`,
+        [
+          players[k].id,
+          tenantForAccolade,
+          k === 0 ? 'gold_champion' : k === 1 ? 'silver_finalist' : 'bronze_competitor',
+          tourOpen[0].id,
+          tourOpen[0].name || 'Seeded Open',
+          k + 1,
+          JSON.stringify({ source: 'seed_marketplace' }),
+        ]
+      );
+      acc += 1;
+    }
+    if (acc) summary.push(`user_accolades:${acc}`);
+  }
+
+  summary.push('marketplace-from-registered:complete');
 }

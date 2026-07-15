@@ -171,13 +171,33 @@ export default function PublicSiteHeader() {
                 Resources
                 <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownSectionLink id="features">Features</DropdownSectionLink>
+                <DropdownSectionLink id="resources">Resources</DropdownSectionLink>
                 <DropdownSectionLink id="pricing">Pricing</DropdownSectionLink>
                 <DropdownSectionLink id="faq">FAQ</DropdownSectionLink>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
+                  <Link to="/rankings">Power rankings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/free-agents">Free agent market</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/community">Community</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/watch">Watch live</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>Career hub</Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
                   <Link to="/privacy">Privacy</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/terms">Terms</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
