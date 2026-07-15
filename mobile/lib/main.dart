@@ -95,6 +95,17 @@ class _HomeShellState extends State<HomeShell> {
   ];
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Keep platform admin / pure players out of organizer hub if prefs were stale
+    final auth = context.read<AuthState>();
+    final hub = context.read<HubState>();
+    if (!auth.loading) {
+      hub.clampForUser(isLeagueHost: auth.isLeagueHost);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
     return Scaffold(

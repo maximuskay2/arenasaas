@@ -22,4 +22,11 @@ class HubState extends ChangeNotifier {
   }
 
   Future<void> toggle() => setMode(mode == HubMode.player ? HubMode.organizer : HubMode.player);
+
+  /// Platform admin / non-hosts must not stay on organizer hub (persisted pref).
+  Future<void> clampForUser({required bool isLeagueHost}) async {
+    if (!isLeagueHost && mode == HubMode.organizer) {
+      await setMode(HubMode.player);
+    }
+  }
 }
