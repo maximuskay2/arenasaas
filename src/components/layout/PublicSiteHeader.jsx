@@ -24,30 +24,61 @@ import { getOrganizerPortalOrigin } from "@/lib/routingLogic";
 import { useAuth } from "@/lib/AuthContext";
 import LiveMatchTicker from "@/components/layout/LiveMatchTicker";
 import ThemeToggle from "@/components/theme/ThemeToggle";
+import { scrollToSection } from "@/lib/scrollToSection";
 
-function SectionNavLink({ id, className, children, onNavigate = () => {} }) {
+/**
+ * Navigate to a landing-page section. On `/`, scroll immediately (RR hash links often no-op).
+ * Off home, go to `/#id` so PublicLanding can scroll after mount.
+ */
+function useGoToLandingSection() {
+  const navigate = useNavigate();
   const { pathname } = useLocation();
-  if (pathname === "/") {
-    return (
-      <a href={`#${id}`} className={className} onClick={onNavigate}>
-        {children}
-      </a>
-    );
-  }
-  return (
-    <Link to={`/#${id}`} className={className} onClick={onNavigate}>
-      {children}
-    </Link>
+
+  return useCallback(
+    (id, { after } = {}) => {
+      const sectionId = String(id || "").replace(/^#/, "");
+      if (!sectionId) return;
+      if (pathname === "/" || pathname === "") {
+        const ok = scrollToSection(sectionId);
+        if (!ok) {
+          // Section not in DOM yet — still set hash for effect retry
+          window.location.hash = sectionId;
+        }
+        after?.();
+        return;
+      }
+      navigate(`/#${sectionId}`);
+      after?.();
+    },
+    [navigate, pathname]
   );
 }
 
-/** In dropdowns: same hash / landing behavior as SectionNavLink. */
-function DropdownSectionLink({ id, children }) {
-  const { pathname } = useLocation();
-  const to = pathname === "/" ? `#${id}` : `/#${id}`;
+function SectionNavLink({ id, className, children, onNavigate = () => {} }) {
+  const go = useGoToLandingSection();
   return (
-    <DropdownMenuItem asChild>
-      <Link to={to}>{children}</Link>
+    <button
+      type="button"
+      className={className}
+      onClick={() => go(id, { after: onNavigate })}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Dropdown item that scrolls to landing section (fixes RR hash + radix menu). */
+function DropdownSectionLink({ id, children }) {
+  const go = useGoToLandingSection();
+  return (
+    <DropdownMenuItem
+      onSelect={() => {
+        // Do not preventDefault — allow Radix to close the menu, then scroll.
+        // Use rAF so scroll runs after menu unmount focus restore.
+        requestAnimationFrame(() => go(id));
+      }}
+    >
+      {children}
     </DropdownMenuItem>
   );
 }
@@ -57,6 +88,7 @@ export default function PublicSiteHeader() {
   const { isAuthenticated } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const goSection = useGoToLandingSection();
 
   const organizerLoginUrl = `${getOrganizerPortalOrigin()}/login`;
 
@@ -176,6 +208,7 @@ export default function PublicSiteHeader() {
                 <DropdownSectionLink id="resources">Resources</DropdownSectionLink>
                 <DropdownSectionLink id="pricing">Pricing</DropdownSectionLink>
                 <DropdownSectionLink id="faq">FAQ</DropdownSectionLink>
+                <DropdownSectionLink id="contact">Contact</DropdownSectionLink>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/rankings">Power rankings</Link>
@@ -233,42 +266,42 @@ export default function PublicSiteHeader() {
                 </p>
                 <Link
                   to="/tournaments"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   All competitions
                 </Link>
                 <Link
                   to="/rankings"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Power rankings
                 </Link>
                 <Link
+                  to="/watch"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
+                  onClick={closeMobileNav}
+                >
+                  Watch live
+                </Link>
+                <Link
                   to={isAuthenticated ? "/matches" : "/login"}
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Match center
                 </Link>
                 <Link
-                  to="/tournaments"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
-                  onClick={closeMobileNav}
-                >
-                  Pick&apos;Em <span className="text-muted-foreground text-xs">(per event)</span>
-                </Link>
-                <Link
                   to={isAuthenticated ? "/dashboard" : "/login"}
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Career hub
                 </Link>
                 <Link
                   to="/free-agents"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Free agent market
@@ -279,7 +312,7 @@ export default function PublicSiteHeader() {
                 </p>
                 <Link
                   to="/community"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Community
@@ -288,33 +321,39 @@ export default function PublicSiteHeader() {
                 <p className="px-3 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border/40 mt-1">
                   Resources
                 </p>
-                <SectionNavLink
-                  id="features"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
-                  onNavigate={closeMobileNav}
-                >
-                  Features
-                </SectionNavLink>
-                <SectionNavLink
-                  id="pricing"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
-                  onNavigate={closeMobileNav}
-                >
-                  Pricing
-                </SectionNavLink>
-                <SectionNavLink
-                  id="faq"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
-                  onNavigate={closeMobileNav}
-                >
-                  FAQ
-                </SectionNavLink>
+                {[
+                  ["features", "Features"],
+                  ["resources", "Resources"],
+                  ["pricing", "Pricing"],
+                  ["faq", "FAQ"],
+                  ["contact", "Contact"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left w-full"
+                    onClick={() => {
+                      closeMobileNav();
+                      // Sheet close animation — slight delay so section is visible
+                      setTimeout(() => goSection(id), 50);
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
                 <Link
                   to="/privacy"
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
                   onClick={closeMobileNav}
                 >
                   Privacy
+                </Link>
+                <Link
+                  to="/terms"
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-secondary/80 text-left"
+                  onClick={closeMobileNav}
+                >
+                  Terms
                 </Link>
                 <a
                   href={organizerLoginUrl}

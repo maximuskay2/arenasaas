@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   ChevronDown,
   Zap,
@@ -33,9 +33,10 @@ import PublicSiteHeader from "@/components/layout/PublicSiteHeader";
 import DiscoveryTournamentCard from "@/components/discovery/DiscoveryTournamentCard";
 import { useAuth } from "@/lib/AuthContext";
 import { tournamentJoinReturnPath } from "@/lib/tournamentJoinIntent";
+import { scrollToSection, scrollToSectionWhenReady } from "@/lib/scrollToSection";
 
 function scrollToId(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  scrollToSection(id);
 }
 
 /** Live match center preview — prefers registered live matches from API */
@@ -141,9 +142,17 @@ const GAMES = [
 
 export default function PublicLanding() {
   const navigate = useNavigate();
+  const location = useLocation();
   const reduceMotion = useReducedMotion();
   const { isAuthenticated, isLoadingAuth } = useAuth();
   const [expandedFaq, setExpandedFaq] = useState(-1);
+
+  // Honor /#features, /#pricing, etc. when navigating from header / other routes
+  useEffect(() => {
+    const raw = location.hash?.replace(/^#/, "").trim();
+    if (!raw) return;
+    scrollToSectionWhenReady(raw, { attempts: 24, delayMs: 40 });
+  }, [location.hash, location.key]);
   const [contactForm, setContactForm] = useState({ email: "", message: "", submitted: false });
   const [contactError, setContactError] = useState("");
   const [contactSending, setContactSending] = useState(false);
@@ -1166,27 +1175,27 @@ export default function PublicLanding() {
               <Link to="/watch" className="text-muted-foreground hover:text-foreground">
                 Watch
               </Link>
-              <a href="#features" className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => scrollToId("features")} className="text-muted-foreground hover:text-foreground">
                 Features
-              </a>
-              <a href="#pricing" className="text-muted-foreground hover:text-foreground">
+              </button>
+              <button type="button" onClick={() => scrollToId("pricing")} className="text-muted-foreground hover:text-foreground">
                 Pricing
-              </a>
-              <a href="#resources" className="text-muted-foreground hover:text-foreground">
+              </button>
+              <button type="button" onClick={() => scrollToId("resources")} className="text-muted-foreground hover:text-foreground">
                 Resources
-              </a>
-              <a href="#faq" className="text-muted-foreground hover:text-foreground">
+              </button>
+              <button type="button" onClick={() => scrollToId("faq")} className="text-muted-foreground hover:text-foreground">
                 FAQ
-              </a>
+              </button>
               <Link to="/privacy" className="text-muted-foreground hover:text-foreground">
                 Privacy
               </Link>
               <Link to="/terms" className="text-muted-foreground hover:text-foreground">
                 Terms
               </Link>
-              <a href="#contact" className="text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => scrollToId("contact")} className="text-muted-foreground hover:text-foreground">
                 Contact
-              </a>
+              </button>
             </nav>
             <p className="text-xs text-muted-foreground">© 2026 Arena Grid</p>
           </div>
