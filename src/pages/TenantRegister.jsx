@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 const steps = [
   { title: "Identity", subtitle: "Login info" },
@@ -197,38 +198,41 @@ export default function TenantRegister() {
 
   if (!registrationKind) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6 font-sans selection:bg-primary/30">
-        <div className="max-w-xl w-full space-y-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-white text-sm font-bold uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </Link>
+      <div className="min-h-screen arena-stage text-foreground flex flex-col items-center justify-center p-6 selection:bg-primary/30">
+        <div className="arena-content max-w-xl w-full space-y-8">
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-bold uppercase tracking-wider">
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Link>
+            <ThemeToggle variant="menu" />
+          </div>
           <div>
-            <h1 className="text-4xl font-black italic uppercase tracking-tighter">Create account</h1>
-            <p className="mt-2 text-slate-400">Register as a league organizer or as a player — same platform, different home screen.</p>
+            <h1 className="text-4xl font-display font-bold tracking-tight">Create account</h1>
+            <p className="mt-2 text-muted-foreground">Register as a league organizer or as a player — same platform, different home screen.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setRegistrationKind("organizer")}
-              className="rounded-2xl border border-white/10 bg-white/5 p-6 text-left transition hover:border-primary/50 hover:bg-primary/10"
+              className="rounded-2xl glass border border-border/50 p-6 text-left transition glass-hover"
             >
               <Building2 className="h-10 w-10 text-primary mb-4" />
-              <p className="text-xs font-black uppercase tracking-widest text-primary">Tournament creator</p>
-              <p className="mt-2 font-black italic uppercase text-lg">Tenant admin</p>
-              <p className="mt-2 text-[11px] text-slate-500">Host leagues, brackets, entry fees, and payouts for your org.</p>
+              <p className="text-xs font-display font-bold uppercase tracking-widest text-primary">Tournament creator</p>
+              <p className="mt-2 font-display font-bold text-lg">Tenant admin</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Host leagues, brackets, entry fees, and payouts for your org.</p>
             </button>
             <button
               type="button"
               onClick={() => setRegistrationKind("player")}
-              className="rounded-2xl border border-white/10 bg-white/5 p-6 text-left transition hover:border-primary/50 hover:bg-primary/10"
+              className="rounded-2xl glass border border-border/50 p-6 text-left transition glass-hover"
             >
               <Gamepad2 className="h-10 w-10 text-primary mb-4" />
-              <p className="text-xs font-black uppercase tracking-widest text-primary">Player / team / gamer</p>
-              <p className="mt-2 font-black italic uppercase text-lg">Competitor</p>
-              <p className="mt-2 text-[11px] text-slate-500">Global identity across tenants — matches, check-in, rosters, wallet.</p>
+              <p className="text-xs font-display font-bold uppercase tracking-widest text-primary">Player / team / gamer</p>
+              <p className="mt-2 font-display font-bold text-lg">Competitor</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">Global identity across tenants — matches, check-in, rosters, wallet.</p>
             </button>
           </div>
-          <p className="text-center text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+          <p className="text-center text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
             Already have an account?{" "}
             <a href={`${getOrganizerPortalOrigin()}/login`} className="text-primary hover:underline">
               Sign in
@@ -243,16 +247,19 @@ export default function TenantRegister() {
   const activeStep = registrationKind === "organizer" ? step : playerStep;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col md:flex-row font-sans selection:bg-primary/30">
+    <div className="min-h-screen arena-stage text-foreground flex flex-col md:flex-row selection:bg-primary/30">
       {/* LEFT SIDE: Progress Visualizer (Desktop Only) */}
-      <div className="hidden md:flex w-1/3 bg-gradient-to-b from-[#0A0A0A] to-[#050505] border-r border-white/5 p-12 flex-col justify-between relative overflow-hidden">
+      <div className="hidden md:flex w-1/3 border-r border-border/50 bg-card/40 backdrop-blur-xl p-12 flex-col justify-between relative overflow-hidden arena-content">
         <div className="absolute top-0 left-0 w-full h-full bg-primary/5 blur-[120px] -translate-x-1/2 -translate-y-1/2" />
         
         <div className="relative z-10">
-          <Link to="/" className="flex items-center gap-3 mb-16 group">
-            <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center italic font-black shadow-lg shadow-primary/20">G</div>
-            <span className="text-xl font-black italic tracking-tighter uppercase">ArenaSaaS</span>
-          </Link>
+          <div className="flex items-center justify-between gap-3 mb-16">
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center font-display font-bold shadow-lg shadow-primary/20 text-primary-foreground">A</div>
+              <span className="text-xl font-display font-bold tracking-tight uppercase">Arena Grid</span>
+            </Link>
+            <ThemeToggle variant="menu" />
+          </div>
 
           <div className="space-y-8">
             {sidebarSteps.map((s, i) => (

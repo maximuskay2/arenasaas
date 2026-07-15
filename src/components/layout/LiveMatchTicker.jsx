@@ -39,7 +39,7 @@ export default function LiveMatchTicker({ className = "" }) {
 
   return (
     <div
-      className={`relative overflow-hidden border-b border-white/10 bg-[#06060a]/95 text-[11px] font-bold uppercase tracking-wider text-slate-300 ${className}`}
+      className={`relative overflow-hidden border-b border-border/50 bg-background/90 text-[11px] font-bold uppercase tracking-wider text-muted-foreground ${className}`}
       role="status"
       aria-live="polite"
     >

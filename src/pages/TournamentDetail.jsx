@@ -34,6 +34,7 @@ import TournamentJoinModal from "@/components/tournament/TournamentJoinModal";
 import InsightsNode from "@/components/insights/InsightsNode";
 import TournamentViewershipPanel from "@/components/insights/TournamentViewershipPanel";
 import TournamentPickEm from "@/components/tournament/TournamentPickEm";
+import StreamManager from "@/components/tournament/StreamManager";
 import { formatPrizeCardLine, formatPrizeDetailLines } from "@/lib/prizeDisplay";
 
 // Logic Engines (Preserved)
@@ -49,14 +50,16 @@ export default function TournamentDetail() {
   const { user, isAuthenticated, isLoadingAuth } = useAuth();
   const [bracketEditMode, setBracketEditMode] = useState(false);
   const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [joinPaymentBootstrap, setJoinPaymentBootstrap] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const editBannerFileRef = useRef(null);
-  const paymentReturnToastShown = useRef(false);
+  const paymentReturnConsumed = useRef(false);
   const joinIntentConsumed = useRef(false);
 
   useEffect(() => {
     joinIntentConsumed.current = false;
+    paymentReturnConsumed.current = false;
   }, [id]);
 
   /** Logged-out visitor with ?join=1 (e.g. shared link) — send to sign-in, then return here with join intent. */
@@ -66,14 +69,32 @@ export default function TournamentDetail() {
     maxikay.auth.redirectToLogin(tournamentJoinReturnPath(id));
   }, [id, isLoadingAuth, isAuthenticated, searchParams]);
 
+  /** Checkout return: open join modal with payment ref + strip query noise. */
   useEffect(() => {
-    if (!id || paymentReturnToastShown.current) return;
+    if (!id || paymentReturnConsumed.current) return;
     const sp = new URLSearchParams(window.location.search);
     const ref = sp.get("session_id") || sp.get("reference") || sp.get("trxref") || sp.get("tx_ref");
-    if (!ref) return;
-    paymentReturnToastShown.current = true;
-    toast.message("Payment Detected", { description: "Open Discover → Join to complete registration.", duration: 8000 });
-  }, [id]);
+    const providerHint = sp.get("provider") || "";
+    if (ref) {
+      paymentReturnConsumed.current = true;
+      setJoinPaymentBootstrap({ reference: ref, provider: providerHint || undefined });
+      setJoinModalOpen(true);
+      toast.message("Payment Detected", {
+        description: "Verifying and opening join so you can finish registration.",
+        duration: 6000,
+      });
+      // Keep join=1; drop payment params so refresh does not re-trigger.
+      const next = new URLSearchParams(sp);
+      ["session_id", "reference", "trxref", "tx_ref", "provider"].forEach((k) => next.delete(k));
+      if (!next.get("join")) next.set("join", "1");
+      const qs = next.toString();
+      navigate({ pathname: window.location.pathname, search: qs ? `?${qs}` : "?join=1" }, { replace: true });
+      return;
+    }
+    if (isTournamentJoinIntent(searchParams) && isAuthenticated && !isLoadingAuth) {
+      setJoinModalOpen(true);
+    }
+  }, [id, searchParams, isAuthenticated, isLoadingAuth, navigate]);
 
   const { data: tournamentRows, isLoading: loadingCrudTournament } = useQuery({
     queryKey: ["tournament", id],
@@ -323,16 +344,16 @@ export default function TournamentDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-[#0a0a0f] text-slate-50">
-        <div className="border-b border-white/5 px-4 py-3">
-          <Button variant="ghost" asChild className="text-slate-400 hover:text-white -ml-2">
+      <div className="flex min-h-[50vh] flex-col">
+        <div className="border-b border-border/40 px-4 py-3">
+          <Button variant="ghost" asChild className="-ml-2">
             <Link to="/tournaments" className="flex items-center gap-2">
               <ArrowLeft className="h-4 w-4" /> Back to tournaments
             </Link>
           </Button>
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <LoadingSpinner />
+          <LoadingSpinner label="Loading tournament…" />
         </div>
       </div>
     );
@@ -340,13 +361,13 @@ export default function TournamentDetail() {
 
   if (!tournament) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 px-4 py-32 text-slate-500">
-        <Button variant="outline" asChild className="border-white/10 bg-white/5 text-slate-200">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 px-4 py-32 text-muted-foreground">
+        <Button variant="outline" asChild>
           <Link to="/tournaments" className="flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" /> Back to tournaments
           </Link>
         </Button>
-        <p className="font-black italic uppercase tracking-wider">Sector Not Found</p>
+        <p className="font-display font-bold uppercase tracking-wider">Tournament not found</p>
       </div>
     );
   }
@@ -354,76 +375,77 @@ export default function TournamentDetail() {
   const liveMainEmbedSrc = tournament.stream_url ? streamEmbedFromUrl(tournament.stream_url) : null;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 px-4 py-8 pb-32 font-sans text-slate-50 selection:bg-primary/30">
-      <div className="sticky top-0 z-40 -mx-4 flex items-center border-b border-white/10 bg-[#0a0a0f]/90 px-4 py-2 backdrop-blur-md sm:hidden">
-        <Button variant="ghost" size="sm" asChild className="text-slate-400 hover:text-white -ml-2 gap-2 font-bold uppercase text-[10px] tracking-widest">
+    <div className="max-w-7xl mx-auto space-y-8 px-0 sm:px-2 py-2 md:py-4 pb-32 selection:bg-primary/30">
+      <div className="sticky top-0 z-40 -mx-1 flex items-center border-b border-border/40 bg-background/80 px-2 py-2 backdrop-blur-md sm:hidden">
+        <Button variant="ghost" size="sm" asChild className="-ml-2 gap-2 font-display text-[10px] tracking-widest uppercase">
           <Link to="/tournaments">
             <ArrowLeft className="h-4 w-4 shrink-0" />
-            Back to tournaments
+            Back
           </Link>
         </Button>
       </div>
 
       {/* 1. CINEMATIC HEADER */}
-      <header className="relative p-10 rounded-[3rem] bg-white/[0.02] border border-white/5 overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] -mr-32 -mt-32" />
+      <header className="relative p-6 md:p-10 rounded-3xl glass border border-border/50 overflow-hidden shadow-arena">
+        <div className="pointer-events-none absolute top-0 right-0 w-72 h-72 bg-primary/15 blur-[100px] -mr-20 -mt-20" />
+        <div className="pointer-events-none absolute bottom-0 left-0 w-48 h-48 bg-accent/10 blur-[80px] -ml-10 -mb-10" />
         
         <div className="flex flex-col lg:flex-row justify-between gap-8 relative z-10">
           <div className="space-y-4">
-            <Button variant="ghost" asChild className="text-slate-500 hover:text-white -ml-2 group hidden sm:inline-flex">
+            <Button variant="ghost" asChild className="text-muted-foreground hover:text-foreground -ml-2 group hidden sm:inline-flex">
               <Link to="/tournaments" className="flex items-center gap-2">
                 <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to tournaments
               </Link>
             </Button>
-            <div className="flex flex-wrap items-center gap-4">
-              <h1 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter leading-none">
+            <div className="flex flex-wrap items-center gap-3 md:gap-4">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-bold tracking-tight leading-[1.05]">
                 {tournament.name}
               </h1>
-              <StatusBadge status={tournament.status} className="h-8 px-4 text-[10px] font-black italic" />
+              <StatusBadge status={tournament.status} />
             </div>
-            <div className="flex items-center gap-6 text-slate-400">
-               <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest">
+            <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
+               <div className="flex items-center gap-2 font-display text-[11px] font-bold uppercase tracking-widest">
                   <Activity className="h-4 w-4 text-primary" /> {tournament.game_title || 'Universal Title'}
                </div>
-               <div className="h-1 w-1 bg-slate-700 rounded-full" />
-               <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-widest">
+               <div className="h-1 w-1 bg-border rounded-full" />
+               <div className="flex items-center gap-2 font-display text-[11px] font-bold uppercase tracking-widest">
                   <LayoutDashboard className="h-4 w-4 text-primary" /> {tournament.format?.replace(/_/g, " ")}
                </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-start lg:self-center">
-             <Button variant="outline" className="rounded-xl border-white/10 bg-white/5 font-black uppercase italic" onClick={() => navigate(`/tournaments/${id}/lobby`)}>
+          <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
+             <Button variant="outline" onClick={() => navigate(`/tournaments/${id}/lobby`)}>
                 Player Lobby
              </Button>
              {hasCrudTournament && tournament.status === "draft" && (
                <Button
+                 variant="arena"
                  onClick={() => updateTournament.mutate({ status: "registration_open" })}
-                 className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl font-black uppercase italic px-6"
                >
                  Publish
                </Button>
              )}
              {hasCrudTournament && (tournament.status === "draft" || tournament.status === "registration_closed") && teams.length >= 2 && (
-               <Button onClick={() => generateBracket.mutate()} className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl font-black uppercase italic px-6">
+               <Button variant="arena" onClick={() => generateBracket.mutate()}>
                  <Zap className="mr-2 h-4 w-4" /> Start Bracket
                </Button>
              )}
-             <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(window.location.href)} className="rounded-xl bg-white/5">
+             <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(window.location.href)} className="rounded-xl bg-secondary/50">
                 <Share2 className="h-4 w-4" />
              </Button>
              {hasCrudTournament && (
              <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20">
+                <Button variant="ghost" size="icon" className="rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="bg-[#0A0A0A] border-white/10 text-white">
-                <AlertDialogHeader><AlertDialogTitle className="font-black italic uppercase">Delete Tournament?</AlertDialogTitle></AlertDialogHeader>
+              <AlertDialogContent className="glass border-border/50">
+                <AlertDialogHeader><AlertDialogTitle className="font-display">Delete tournament?</AlertDialogTitle></AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="bg-white/5 border-white/10">Abort</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deleteTournament.mutate()} className="bg-red-600">Erase Data</AlertDialogAction>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteTournament.mutate()} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -447,8 +469,8 @@ export default function TournamentDetail() {
         />
       </div>
 
-      <div className="p-6 md:p-8 rounded-[2rem] bg-white/5 border border-primary/20 space-y-3" aria-label="Prize pool and placements">
-        <h3 className="text-sm font-black uppercase italic tracking-widest text-primary flex items-center gap-2">
+      <div className="p-6 md:p-8 rounded-3xl glass border border-primary/20 space-y-3 shadow-arena-card" aria-label="Prize pool and placements">
+        <h3 className="section-label text-primary flex items-center gap-2 !tracking-[0.18em]">
           <Trophy className="h-4 w-4" /> Prize pool &amp; placements
         </h3>
         <p className="text-xs text-muted-foreground">
@@ -864,34 +886,34 @@ export default function TournamentDetail() {
 
       {/* 4. MAIN TABS (Bracket, Live, Teams) */}
       <Tabs defaultValue={matches.length > 0 ? "bracket" : "teams"} className="space-y-6">
-        <TabsList className="bg-white/5 border border-white/10 h-14 p-1 rounded-2xl">
-          <TabTrigger value="bracket">Tournament Bracket</TabTrigger>
+        <TabsList className="flex flex-wrap h-auto gap-1 justify-start p-1.5 glass rounded-2xl border border-border/50 bg-card/40">
+          <TabTrigger value="bracket">Bracket</TabTrigger>
           <TabTrigger value="teams">Roster ({teams.length})</TabTrigger>
-          <TabTrigger value="pickem">Pick &apos;Em</TabTrigger>
+          <TabTrigger value="pickem">Pick&apos;Em</TabTrigger>
           <TabTrigger value="live" className="gap-2">
-            {tournament.status === "in_progress" && <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />} Live Broadcast
+            {tournament.status === "in_progress" && <span className="live-dot" />} Live
           </TabTrigger>
           <TabTrigger value="analytics">Performance</TabTrigger>
           {showLeagueTab ? <TabTrigger value="league">League table</TabTrigger> : null}
           <TabTrigger value="insights" className="gap-2">
-            <BarChart3 className="h-3.5 w-3.5 opacity-80" /> Stats &amp; insights
+            <BarChart3 className="h-3.5 w-3.5 opacity-80" /> Insights
           </TabTrigger>
-          <TabTrigger value="info">Rules & Intel</TabTrigger>
+          <TabTrigger value="info">Rules</TabTrigger>
         </TabsList>
 
         <TabsContent value="bracket" className="space-y-6">
            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black italic uppercase tracking-tighter">Current Standings</h3>
+              <h3 className="text-xl font-display font-bold tracking-tight">Bracket</h3>
               {hasCrudTournament && (
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setBracketEditMode(!bracketEditMode)} className={`rounded-xl border-white/10 h-10 italic font-black uppercase ${bracketEditMode ? 'bg-primary border-primary' : ''}`}>
+                <Button variant={bracketEditMode ? "arena" : "outline"} onClick={() => setBracketEditMode(!bracketEditMode)} className="h-10">
                    <Settings2 className="mr-2 h-4 w-4" /> {bracketEditMode ? "Lock Bracket" : "Edit Seeding"}
                 </Button>
               </div>
               )}
            </div>
            
-           <div className="rounded-[3rem] bg-white/[0.02] border border-white/5 p-8 min-h-[500px]">
+           <div className="rounded-3xl glass border border-border/50 p-4 md:p-8 min-h-[500px] shadow-arena-card">
               {bracketEditMode ? (
                 <BracketEditor matches={matches} teams={teams} tournamentId={id} onClose={() => setBracketEditMode(false)} />
               ) : (
@@ -904,14 +926,24 @@ export default function TournamentDetail() {
            <TeamsList teams={teams} tournamentId={id} tournament={tournament} />
         </TabsContent>
 
-        <TabsContent value="pickem" className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/10">
+        <TabsContent value="pickem" className="p-6 md:p-8 rounded-3xl glass border border-border/50">
           <TournamentPickEm tournamentId={id} tournamentTenantId={tournament?.tenant_id} />
         </TabsContent>
 
-        <TabsContent value="live" className="space-y-8 p-8 rounded-[2rem] bg-white/5 border border-white/10">
+        <TabsContent value="live" className="space-y-8 p-6 md:p-8 rounded-3xl glass border border-border/50">
+          <StreamManager
+            tournamentId={id}
+            canEdit={
+              !!user &&
+              (user.role === "admin" ||
+                user.role === "super_admin" ||
+                user.role === "organizer" ||
+                String(user.email || "").toLowerCase() === String(tournament?.created_by || "").toLowerCase())
+            }
+          />
           <div className="flex items-center gap-3">
             <Radio className="h-5 w-5 text-red-500" />
-            <h3 className="text-xl font-black italic uppercase tracking-tighter">Live broadcast</h3>
+            <h3 className="text-xl font-display font-bold tracking-tight">Live broadcast</h3>
           </div>
           {tournament.stream_url ? (
             <div className="space-y-4">
@@ -969,8 +1001,8 @@ export default function TournamentDetail() {
           )}
         </TabsContent>
 
-        <TabsContent value="league" className="space-y-6 p-8 rounded-[2rem] bg-white/5 border border-white/10">
-          <h3 className="text-xl font-black italic uppercase tracking-tighter">League standings</h3>
+        <TabsContent value="league" className="space-y-6 p-6 md:p-8 rounded-3xl glass border border-border/50">
+          <h3 className="text-xl font-display font-bold tracking-tight">League standings</h3>
           <p className="text-xs text-slate-500">
             Win 3 pts · Draw 1 pt · Loss 0. Updated when results are finalized on completed matches.
           </p>
@@ -1134,7 +1166,11 @@ export default function TournamentDetail() {
       {joinModalOpen && (
         <TournamentJoinModal
           tournament={tournament}
-          onClose={() => setJoinModalOpen(false)}
+          initialPayment={joinPaymentBootstrap}
+          onClose={() => {
+            setJoinModalOpen(false);
+            setJoinPaymentBootstrap(null);
+          }}
           extraInvalidateQueryKeys={[
             ["tournament", id],
             ["tournament-teams", id],
@@ -1169,7 +1205,7 @@ function TabTrigger({ value, children, className }) {
   return (
     <TabsTrigger 
       value={value} 
-      className={`rounded-xl px-8 h-full data-[state=active]:bg-primary data-[state=active]:text-white font-black uppercase italic text-xs tracking-wider transition-all ${className}`}
+      className={`rounded-xl px-4 py-2.5 data-[state=active]:bg-primary/15 data-[state=active]:text-primary font-display font-bold uppercase text-[10px] tracking-wider transition-all ${className || ""}`}
     >
       {children}
     </TabsTrigger>

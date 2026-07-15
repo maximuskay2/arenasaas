@@ -94,8 +94,9 @@ export async function deliverFcmNotification(payload = {}) {
   }
 
   let tokens = Array.isArray(payload.tokens) ? payload.tokens.map((t) => String(t).trim()).filter(Boolean) : [];
-  if (!tokens.length && payload.user_sub) {
-    tokens = await tokensForUser(payload.user_sub);
+  const userKey = payload.user_sub || payload.user_id;
+  if (!tokens.length && userKey) {
+    tokens = await tokensForUser(userKey);
   }
   tokens = [...new Set(tokens)].slice(0, 500);
   if (!tokens.length) {

@@ -265,81 +265,116 @@ export default function MatchDetail() {
     });
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (!match) return <div className="text-center py-20 text-muted-foreground">Match not found</div>;
+  if (isLoading) return <LoadingSpinner label="Loading match…" />;
+  if (!match) {
+    return (
+      <div className="text-center py-20 space-y-4">
+        <p className="text-muted-foreground font-display font-bold uppercase tracking-wider">Match not found</p>
+        <Button variant="outline" onClick={() => navigate(-1)}>
+          <ArrowLeft className="w-4 h-4 mr-1" /> Back
+        </Button>
+      </div>
+    );
+  }
 
   const currentScoreA = scoreA ?? match.score_a;
   const currentScoreB = scoreB ?? match.score_b;
 
+  const tabBtn = (key, label, extra) => (
+    <button
+      type="button"
+      onClick={() => setActiveTab(key)}
+      className={`flex-1 text-[10px] font-display font-bold uppercase tracking-wider py-2.5 rounded-xl transition-all flex items-center justify-center gap-1 ${
+        activeTab === key
+          ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+      }`}
+    >
+      {extra}
+      {label}
+    </button>
+  );
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-20 md:pb-0">
+    <div className="max-w-2xl mx-auto space-y-6 pb-20 md:pb-8">
       <MatchReadyBanner match={match} />
       <PageHeader
-        title={`${match.team_a_name || "TBD"} vs ${match.team_b_name || "TBD"}`}
+        eyebrow="Match control"
+        title={
+          <>
+            <span className="text-foreground">{match.team_a_name || "TBD"}</span>
+            <span className="text-muted-foreground font-normal mx-2 text-lg">vs</span>
+            <span className="text-foreground">{match.team_b_name || "TBD"}</span>
+          </>
+        }
         subtitle={
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex flex-wrap items-center gap-3 mt-1">
             <StatusBadge status={match.status} />
-            <span className="text-xs text-muted-foreground">{match.bracket_position} · Round {match.round} · v{match.version || 1}</span>
+            <span className="text-xs text-muted-foreground">
+              {match.bracket_position || "Bracket"} · Round {match.round} · v{match.version || 1}
+            </span>
           </div>
         }
         actions={
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             {id ? (
               <Button variant="outline" size="sm" asChild>
-                <Link to={`/matches/${id}/live`} className="gap-1">
+                <Link to={`/matches/${id}/live`} className="gap-1.5">
                   <Tv className="w-4 h-4" /> Live center
                 </Link>
               </Button>
             ) : null}
-            <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </div>
         }
       />
 
-      {/* Fetch teams for voting widget */}
       {match && !match.team_a_id && (
-        <div className="py-4 text-center text-muted-foreground text-sm">Teams not assigned yet</div>
+        <div className="py-4 text-center text-muted-foreground text-sm glass rounded-2xl border border-border/50">
+          Teams not assigned yet
+        </div>
       )}
 
-
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-secondary/40 rounded-lg p-1">
-        <button onClick={() => setActiveTab("match")} className={`flex-1 text-xs font-display py-1.5 rounded-md transition-all ${activeTab === "match" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Match</button>
-        <button onClick={() => setActiveTab("highlights")} className={`flex-1 text-xs font-display py-1.5 rounded-md transition-all ${activeTab === "highlights" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Highlights</button>
-        {match.status === "in_progress" && <button onClick={() => setActiveTab("voting")} className={`flex-1 text-xs font-display py-1.5 rounded-md transition-all ${activeTab === "voting" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Voting</button>}
-        <button onClick={() => setActiveTab("stream")} className={`flex-1 text-xs font-display py-1.5 rounded-md transition-all flex items-center justify-center gap-1 ${activeTab === "stream" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          {(match.stream_url || match.tournament_id) && <Radio className="w-3 h-3 text-red-400 animate-pulse" />}
-          Watch
-        </button>
+      <div className="flex gap-1 glass rounded-2xl p-1.5 border border-border/50">
+        {tabBtn("match", "Match")}
+        {tabBtn("highlights", "Highlights")}
+        {match.status === "in_progress" && tabBtn("voting", "Voting")}
+        {tabBtn(
+          "stream",
+          "Watch",
+          (match.stream_url || match.tournament_id) ? (
+            <Radio className="w-3 h-3 text-red-400 animate-pulse" />
+          ) : null
+        )}
       </div>
 
       {activeTab === "stream" && (
         <div className="space-y-4">
           {/* Per-match stream */}
-          <div className="glass rounded-xl p-4 space-y-3">
+          <div className="glass rounded-2xl p-4 space-y-3 border border-border/50 shadow-arena-card">
             <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium flex items-center gap-1.5"><Tv className="w-3.5 h-3.5" /> Match Stream URL</p>
-              <button onClick={() => { setStreamDraft(match.stream_url || ""); setEditingStream(!editingStream); }} className="text-[10px] text-primary hover:underline">{editingStream ? "Cancel" : "Edit"}</button>
+              <p className="section-label flex items-center gap-1.5"><Tv className="w-3.5 h-3.5" /> Match stream URL</p>
+              <button type="button" onClick={() => { setStreamDraft(match.stream_url || ""); setEditingStream(!editingStream); }} className="text-[10px] font-display font-bold uppercase tracking-wider text-primary hover:underline">{editingStream ? "Cancel" : "Edit"}</button>
             </div>
             {editingStream ? (
               <div className="flex gap-2">
-                <Input value={streamDraft} onChange={(e) => setStreamDraft(e.target.value)} className="bg-secondary/50 text-xs" placeholder="twitch.tv/channel or youtube.com/watch?v=…" />
-                <Button size="sm" onClick={() => saveMatchStream.mutate(streamDraft)} disabled={saveMatchStream.isPending} className="text-xs">Save</Button>
+                <Input value={streamDraft} onChange={(e) => setStreamDraft(e.target.value)} className="bg-background/40 border-border/60 text-xs rounded-xl" placeholder="twitch.tv/channel or youtube.com/watch?v=…" />
+                <Button size="sm" variant="arena" onClick={() => saveMatchStream.mutate(streamDraft)} disabled={saveMatchStream.isPending} className="text-xs">Save</Button>
               </div>
             ) : match.stream_url ? (
-              <p className="text-xs text-muted-foreground">{match.stream_url}</p>
+              <p className="text-xs text-muted-foreground break-all">{match.stream_url}</p>
             ) : (
-              <p className="text-xs text-muted-foreground/50 italic">No match-specific stream set</p>
+              <p className="text-xs text-muted-foreground/70">No match-specific stream set</p>
             )}
           </div>
-          {/* Embed: prefer match stream, fallback to tournament stream */}
           {parsedMatchStream ? (
-            <div className="glass rounded-xl overflow-hidden border border-red-500/20">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-border/40 bg-red-500/10">
+            <div className="glass rounded-2xl overflow-hidden border border-red-500/25 shadow-arena">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-red-500/10">
                 <Radio className="w-3.5 h-3.5 text-red-400 animate-pulse" />
-                <span className="text-xs font-display uppercase tracking-wider text-red-400 font-semibold">Live · Match Stream</span>
+                <span className="text-[10px] font-display uppercase tracking-wider text-red-400 font-bold">Live · Match stream</span>
               </div>
               <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
                 {parsedMatchStream.type === "twitch" ? (
@@ -377,29 +412,30 @@ export default function MatchDetail() {
 
       {/* Score display */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={`glass rounded-2xl p-8 text-center ${match.status === "in_progress" ? "glow-primary" : ""}`}
+        className={`relative overflow-hidden glass rounded-3xl p-8 text-center border border-border/50 shadow-arena ${match.status === "in_progress" ? "glow-border-primary" : ""}`}
       >
-        <div className="flex items-center justify-center gap-8">
-          <div className="flex-1 text-right">
-            <p className={`font-display font-bold text-lg ${match.winner_id === match.team_a_id ? "text-primary" : "text-foreground"}`}>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
+        <div className="relative flex items-center justify-center gap-6 md:gap-8">
+          <div className="flex-1 text-right min-w-0">
+            <p className={`font-display font-bold text-base md:text-lg truncate ${match.winner_id === match.team_a_id ? "text-primary" : "text-foreground"}`}>
               {match.team_a_name || "TBD"}
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-4xl font-display font-black text-primary">{match.score_a}</span>
-            <span className="text-lg text-muted-foreground">:</span>
-            <span className="text-4xl font-display font-black text-primary">{match.score_b}</span>
+          <div className="flex items-center gap-3 md:gap-4 shrink-0">
+            <span className="text-4xl md:text-5xl font-display font-bold text-primary tabular-nums">{match.score_a ?? 0}</span>
+            <span className="text-sm text-muted-foreground font-display">VS</span>
+            <span className="text-4xl md:text-5xl font-display font-bold text-primary tabular-nums">{match.score_b ?? 0}</span>
           </div>
-          <div className="flex-1 text-left">
-            <p className={`font-display font-bold text-lg ${match.winner_id === match.team_b_id ? "text-primary" : "text-foreground"}`}>
+          <div className="flex-1 text-left min-w-0">
+            <p className={`font-display font-bold text-base md:text-lg truncate ${match.winner_id === match.team_b_id ? "text-primary" : "text-foreground"}`}>
               {match.team_b_name || "TBD"}
             </p>
           </div>
         </div>
         {match.winner_name && (
-          <p className="mt-4 text-sm text-primary font-display font-semibold">
+          <p className="relative mt-5 text-sm text-primary font-display font-semibold">
             Winner: {match.winner_name}
           </p>
         )}
@@ -407,20 +443,20 @@ export default function MatchDetail() {
 
       {/* Actions */}
       {match.status !== "completed" && match.status !== "forfeited" && (
-        <div className="glass rounded-xl p-6 space-y-5">
-          <h3 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">Match Controls</h3>
+        <div className="glass rounded-3xl p-6 space-y-5 border border-border/50 shadow-arena-card">
+          <h3 className="section-label">Match controls</h3>
 
           {match.status === "pending" && (
             <div className="space-y-4">
               <CheckInPanel match={match} onCheckIn={handleCheckIn} isLoading={updateMatch.isPending} />
               {match.team_a_checked_in && match.team_b_checked_in && (
-                <Button onClick={startMatch} className="w-full gap-2 font-display text-xs tracking-wider" disabled={updateMatch.isPending}>
-                  <Play className="w-4 h-4" /> START MATCH
+                <Button variant="arena" onClick={startMatch} className="w-full gap-2" disabled={updateMatch.isPending}>
+                  <Play className="w-4 h-4" /> Start match
                 </Button>
               )}
               {!match.team_a_checked_in && !match.team_b_checked_in && (
-                <Button onClick={startMatch} variant="outline" className="w-full gap-2 font-display text-xs text-muted-foreground" disabled={updateMatch.isPending}>
-                  <Play className="w-4 h-4" /> Skip Check-in & Start
+                <Button onClick={startMatch} variant="outline" className="w-full gap-2" disabled={updateMatch.isPending}>
+                  <Play className="w-4 h-4" /> Skip check-in &amp; start
                 </Button>
               )}
             </div>
@@ -433,8 +469,8 @@ export default function MatchDetail() {
           )}
 
           {match.status === "checked_in" && (
-            <Button onClick={startMatch} className="w-full gap-2 font-display text-xs tracking-wider" disabled={updateMatch.isPending}>
-              <Play className="w-4 h-4" /> START MATCH
+            <Button variant="arena" onClick={startMatch} className="w-full gap-2" disabled={updateMatch.isPending}>
+              <Play className="w-4 h-4" /> Start match
             </Button>
           )}
 
@@ -478,8 +514,8 @@ export default function MatchDetail() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={submitScore} disabled={updateMatch.isPending} className="flex-1 gap-2 font-display text-xs tracking-wider">
-                  <Check className="w-4 h-4" /> SUBMIT SCORE
+                <Button variant="arena" onClick={submitScore} disabled={updateMatch.isPending} className="flex-1 gap-2">
+                  <Check className="w-4 h-4" /> Submit score
                 </Button>
                 {match.status !== "under_dispute" && (
                   <Button onClick={disputeMatch} variant="outline" disabled={updateMatch.isPending} className="gap-2 text-orange-400 border-orange-400/30">
@@ -493,53 +529,53 @@ export default function MatchDetail() {
       )}
 
       {/* Match info */}
-      <div className="glass rounded-xl p-6 space-y-3">
-        <h3 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">Details</h3>
+      <div className="glass rounded-3xl p-6 space-y-3 border border-border/50 shadow-arena-card">
+        <h3 className="section-label">Details</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-xs text-muted-foreground">Round</span>
-            <p className="font-semibold">{match.round}</p>
+            <span className="section-label !normal-case tracking-normal">Round</span>
+            <p className="font-semibold mt-0.5">{match.round}</p>
           </div>
           <div>
-            <span className="text-xs text-muted-foreground">Match #</span>
-            <p className="font-semibold">{match.match_number}</p>
+            <span className="section-label !normal-case tracking-normal">Match #</span>
+            <p className="font-semibold mt-0.5">{match.match_number}</p>
           </div>
           <div>
-            <span className="text-xs text-muted-foreground">Position</span>
-            <p className="font-semibold">{match.bracket_position}</p>
+            <span className="section-label !normal-case tracking-normal">Position</span>
+            <p className="font-semibold mt-0.5">{match.bracket_position || "—"}</p>
           </div>
           <div>
-            <span className="text-xs text-muted-foreground">Version</span>
-            <p className="font-semibold">{match.version || 1}</p>
+            <span className="section-label !normal-case tracking-normal">Version</span>
+            <p className="font-semibold mt-0.5 tabular-nums">{match.version || 1}</p>
           </div>
         </div>
         {match.notes && (
           <div className="pt-3 border-t border-border/50">
-            <span className="text-xs text-muted-foreground">Notes</span>
-            <p className="text-sm mt-1">{match.notes}</p>
+            <span className="section-label !normal-case tracking-normal">Notes</span>
+            <p className="text-sm mt-1 text-muted-foreground">{match.notes}</p>
           </div>
         )}
       </div>
 
       {/* Post-match reporting */}
       {(match.status === "in_progress" || match.status === "completed") && (
-        <div className="glass rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
-              <FileText className="w-4 h-4" /> Score Reports
+        <div className="glass rounded-3xl p-6 space-y-4 border border-border/50 shadow-arena-card">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="section-label flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" /> Score reports
             </h3>
-            <div className="flex gap-1">
-              <Button size="sm" variant={reportTab === "submit" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setReportTab("submit")}>
+            <div className="flex gap-1 glass rounded-xl p-1 border border-border/40">
+              <Button size="sm" variant={reportTab === "submit" ? "arena" : "ghost"} className="text-xs h-8" onClick={() => setReportTab("submit")}>
                 <FileText className="w-3.5 h-3.5 mr-1" /> Submit
               </Button>
-              <Button size="sm" variant={reportTab === "review" ? "default" : "ghost"} className="text-xs h-7" onClick={() => setReportTab("review")}>
+              <Button size="sm" variant={reportTab === "review" ? "arena" : "ghost"} className="text-xs h-8" onClick={() => setReportTab("review")}>
                 <ClipboardCheck className="w-3.5 h-3.5 mr-1" /> Review
               </Button>
             </div>
           </div>
           {reportTab === "submit" ? (
             reportSubmitted ? (
-              <p className="text-sm text-green-400 text-center py-4">✓ Report submitted — awaiting organizer approval.</p>
+              <p className="text-sm text-emerald-400 text-center py-4 font-medium">Report submitted — awaiting organizer approval.</p>
             ) : (
               <ScoreReportForm
                 match={match}

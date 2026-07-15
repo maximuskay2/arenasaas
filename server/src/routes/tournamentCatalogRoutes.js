@@ -448,34 +448,77 @@ router.get('/tournaments-catalog', optionalAuth, handleCatalog);
 /** Alias — matches TRANSACTION_LAYER public tournaments naming. */
 router.get('/tournaments', optionalAuth, handleCatalog);
 
-/** Match Center: stream URL resolution for embed (Twitch / YouTube). */
+/** Match Center: stream URL resolution for embed (Twitch / YouTube) + multi-stream list. */
 router.get('/match/:matchId/watch', optionalAuth, async (req, res) => {
   const matchId = String(req.params.matchId || '').trim();
   if (!matchId) return res.status(400).json({ error: 'matchId required' });
   try {
-    const row = await runWithRls(pool, catalogReadContext(), async (client) => {
+    const payload = await runWithRls(pool, catalogReadContext(), async (client) => {
       const { rows } = await client.query(
-        `SELECT m.*, t.name AS tournament_name, t.stream_url AS tournament_stream_url, t.status AS tournament_status
+        `SELECT m.*, t.name AS tournament_name, t.stream_url AS tournament_stream_url, t.status AS tournament_status,
+                t.id::text AS tournament_uuid
          FROM matches m
          INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
          WHERE m.id::text = $1 AND t.status NOT IN ('draft', 'cancelled') LIMIT 1`,
         [matchId]
       );
-      return rows[0] || null;
+      const row = rows[0] || null;
+      if (!row) return null;
+
+      let streams = [];
+      try {
+        const s = await client.query(
+          `SELECT id, label, stream_url, provider, sort_order, is_primary, match_id
+           FROM tournament_streams
+           WHERE tournament_id::text = $1
+             AND (match_id IS NULL OR match_id::text = $2 OR btrim(match_id) = '')
+           ORDER BY is_primary DESC, sort_order ASC, created_date ASC
+           LIMIT 20`,
+          [String(row.tournament_id), matchId]
+        );
+        streams = s.rows;
+      } catch {
+        streams = [];
+      }
+
+      const primary =
+        streams.find((x) => x.is_primary)?.stream_url ||
+        streams[0]?.stream_url ||
+        row.stream_url ||
+        row.tournament_stream_url ||
+        '';
+
+      // Synthesize default list when only legacy columns exist
+      if (!streams.length && primary) {
+        streams = [
+          {
+            id: 'legacy-main',
+            label: 'Main',
+            stream_url: primary,
+            provider: null,
+            sort_order: 0,
+            is_primary: true,
+            match_id: matchId,
+          },
+        ];
+      }
+
+      return { match: row, stream_url: primary, streams };
     });
-    if (!row) return res.status(404).json({ error: 'Match not found' });
-    const streamUrl = row.stream_url || row.tournament_stream_url || '';
-    res.json({ match: row, stream_url: streamUrl });
+    if (!payload) return res.status(404).json({ error: 'Match not found' });
+    res.json(payload);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: clientSafeErrorMessage(e) });
   }
 });
 
-/** Global Elo leaderboard (+ trend vs ~14d snapshot, Apex top 10). */
+/** Global Elo leaderboard (+ trend vs ~14d snapshot, Apex top 10). Query: kind=team|player (default team). */
 router.get('/power-rankings', optionalAuth, async (req, res) => {
   try {
     const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const kindRaw = String(req.query.kind || 'team').toLowerCase();
+    const entityKind = kindRaw === 'player' ? 'player' : 'team';
     const rankings = await runWithRls(pool, catalogReadContext(), async (client) => {
       const { rows } = await client.query(
         `WITH ranked AS (
@@ -483,6 +526,7 @@ router.get('/power-rankings', optionalAuth, async (req, res) => {
              ROW_NUMBER() OVER (ORDER BY e.elo DESC, e.wins DESC, e.losses ASC) AS global_rank
            FROM elo_entities e
            WHERE (e.wins + e.losses) > 0
+             AND COALESCE(e.entity_kind, 'team') = $2
          )
          SELECT r.*,
            (SELECT h.rating_after FROM team_ratings_history h
@@ -491,7 +535,7 @@ router.get('/power-rankings', optionalAuth, async (req, res) => {
          FROM ranked r
          ORDER BY r.global_rank ASC
          LIMIT $1`,
-        [limit]
+        [limit, entityKind]
       );
       return rows.map((row) => {
         const apex = Number(row.global_rank) <= 10;
@@ -507,6 +551,7 @@ router.get('/power-rankings', optionalAuth, async (req, res) => {
           display_name: row.display_name,
           tag: row.tag,
           tenant_id: row.tenant_id,
+          entity_kind: row.entity_kind || entityKind,
           elo,
           wins: row.wins,
           losses: row.losses,
@@ -516,7 +561,7 @@ router.get('/power-rankings', optionalAuth, async (req, res) => {
         };
       });
     });
-    res.json({ rankings });
+    res.json({ rankings, kind: entityKind });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: clientSafeErrorMessage(e) });
@@ -608,6 +653,120 @@ router.get('/player-career', optionalAuth, async (req, res) => {
       };
     });
     if (!body.user) return res.status(404).json({ error: 'User not found' });
+    res.json(body);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/**
+ * Global live / upcoming watch hub for spectators.
+ * GET /api/public/live-matches
+ */
+router.get('/live-matches', optionalAuth, async (req, res) => {
+  const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 24));
+  try {
+    const rows = await runWithRls(pool, catalogReadContext(), async (client) => {
+      const r = await client.query(
+        `
+        SELECT
+          m.id, m.tournament_id, m.status, m.score_a, m.score_b,
+          m.team_a_name, m.team_b_name, m.scheduled_time, m.stream_url AS match_stream_url,
+          m.round, m.match_number,
+          t.name AS tournament_name, t.game_title, t.stream_url AS tournament_stream_url,
+          t.banner_url, t.prize_pool, t.currency, t.tenant_id,
+          tn.name AS organizer_name, tn.slug AS organizer_slug,
+          COALESCE(m.stream_url, t.stream_url) AS stream_url
+        FROM matches m
+        INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
+        LEFT JOIN tenants tn ON tn.id::text = t.tenant_id
+        WHERE t.status NOT IN ('draft', 'cancelled')
+          AND m.status IN ('in_progress', 'check_in_open', 'checked_in', 'under_dispute')
+        ORDER BY
+          CASE m.status WHEN 'in_progress' THEN 0 WHEN 'under_dispute' THEN 1 ELSE 2 END,
+          m.scheduled_time NULLS LAST,
+          m.updated_date DESC
+        LIMIT $1
+        `,
+        [limit]
+      );
+      return r.rows;
+    });
+    res.json({
+      items: rows.map((row) => ({
+        ...row,
+        watch_path: `/matches/${row.id}/live`,
+        has_stream: Boolean(row.stream_url),
+      })),
+      total: rows.length,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Organizer event-day ops snapshot for a tenant. */
+router.get('/ops-board', optionalAuth, async (req, res) => {
+  const tenantId = String(req.query.tenant_id || req.headers['x-tenant-id'] || '').trim();
+  if (!tenantId) return res.status(400).json({ error: 'tenant_id required' });
+  try {
+    const body = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const [openReg, live, disputes, checkIn, drafts] = await Promise.all([
+        client.query(
+          `SELECT id, name, status, registered_teams, max_teams, game_title, prize_pool, currency
+           FROM tournaments WHERE tenant_id = $1 AND status = 'registration_open'
+           ORDER BY start_date NULLS LAST LIMIT 20`,
+          [tenantId]
+        ),
+        client.query(
+          `SELECT m.id, m.tournament_id, m.status, m.team_a_name, m.team_b_name, m.score_a, m.score_b,
+                  m.scheduled_time, t.name AS tournament_name
+           FROM matches m
+           INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
+           WHERE m.tenant_id = $1 AND m.status = 'in_progress'
+           ORDER BY m.updated_date DESC LIMIT 30`,
+          [tenantId]
+        ),
+        client.query(
+          `SELECT m.id, m.tournament_id, m.team_a_name, m.team_b_name, m.status, t.name AS tournament_name
+           FROM matches m
+           INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
+           WHERE m.tenant_id = $1 AND m.status = 'under_dispute'
+           ORDER BY m.updated_date DESC LIMIT 20`,
+          [tenantId]
+        ),
+        client.query(
+          `SELECT m.id, m.tournament_id, m.team_a_name, m.team_b_name, m.check_in_deadline,
+                  m.team_a_checked_in, m.team_b_checked_in, t.name AS tournament_name
+           FROM matches m
+           INNER JOIN tournaments t ON t.id::text = m.tournament_id::text
+           WHERE m.tenant_id = $1 AND m.status IN ('check_in_open', 'checked_in')
+           ORDER BY m.check_in_deadline NULLS LAST LIMIT 30`,
+          [tenantId]
+        ),
+        client.query(
+          `SELECT id, name, status, game_title FROM tournaments
+           WHERE tenant_id = $1 AND status = 'draft' ORDER BY updated_date DESC LIMIT 10`,
+          [tenantId]
+        ),
+      ]);
+      return {
+        open_registration: openReg.rows,
+        live_matches: live.rows,
+        disputes: disputes.rows,
+        check_ins: checkIn.rows,
+        drafts: drafts.rows,
+        counts: {
+          open_registration: openReg.rows.length,
+          live_matches: live.rows.length,
+          disputes: disputes.rows.length,
+          check_ins: checkIn.rows.length,
+          drafts: drafts.rows.length,
+        },
+      };
+    });
     res.json(body);
   } catch (e) {
     console.error(e);

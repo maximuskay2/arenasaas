@@ -18,6 +18,29 @@ export function kFactorFromPrizePool(prizePool) {
   return 24;
 }
 
+/** Floor K by explicit tournament prestige tier (Phase 2 elo_tier). */
+export function kFactorFromEloTier(tier) {
+  const t = String(tier || "")
+    .trim()
+    .toLowerCase();
+  if (t === "major") return 40;
+  if (t === "premier") return 32;
+  if (t === "regional") return 28;
+  if (t === "community") return 24;
+  return null;
+}
+
+/**
+ * K = max(prize-pool K, elo_tier floor) so small-pool majors still move ratings.
+ * @param {{ prize_pool?: number, elo_tier?: string } | null} tournament
+ */
+export function kFactorFromTournament(tournament) {
+  const fromPool = kFactorFromPrizePool(tournament?.prize_pool);
+  const fromTier = kFactorFromEloTier(tournament?.elo_tier);
+  if (fromTier == null) return fromPool;
+  return Math.max(fromPool, fromTier);
+}
+
 /**
  * @returns {{ newA: number, newB: number, deltaA: number, deltaB: number }}
  */

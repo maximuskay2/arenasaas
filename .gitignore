@@ -30,3 +30,8 @@ coverage/
 
 # OS
 Thumbs.db
+
+# Firebase client secrets
+mobile/android/app/google-services.json
+mobile/ios/Runner/GoogleService-Info.plist
+server/.env

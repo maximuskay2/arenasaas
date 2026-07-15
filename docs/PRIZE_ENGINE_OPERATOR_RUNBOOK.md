@@ -8,8 +8,24 @@ How payouts run after **Finalize tournament**, how to debug failures, and where 
 2. The API checks: all matches terminal (`completed` / `forfeited` / `no_show`), no `under_dispute` matches, no `match_reports` with `status = 'disputed'`, then runs **prize validation** (`computeSettlementAmounts` in `server/src/lib/prizeCalculator.js`).
 3. If there is no usable `prize_structure`, the tournament is marked completed and `payout_job_status` is set to `completed` (job skipped).
 4. Otherwise the row is updated to `payout_job_status = 'queued'` and a job is enqueued via `server/src/jobs/prizePayoutQueue.js`:
-   - **If `REDIS_URL` is set:** BullMQ worker in `server/src/jobs/prizePayoutBullmq.js` (started from `server/src/index.js`).
+   - **If `REDIS_URL` is set:** BullMQ worker in `server/src/jobs/prizePayoutBullmq.js` (started from `server/src/index.js` unless `PRIZE_PAYOUT_WORKER=0`).
    - **Otherwise:** in-process drain of the same queue module.
+   - **Docker:** `prize-payout-worker` service in `docker-compose.yml` runs a dedicated BullMQ consumer (use `PRIZE_PAYOUT_WORKER=0` on API when scaling multiple API replicas).
+   - **Victory push/email:** payout lines enqueue FCM (`user_sub`) and call `sendPlatformEmail` when transport is configured.
+
+## Operator drill (local Redis)
+
+```bash
+# From repo root — DB + Redis + workers
+docker compose up -d
+npm run migrate && npm run db:seed
+# API with Redis (prize BullMQ + forfeit poller)
+# server/.env: REDIS_URL=redis://127.0.0.1:6381  FORFEIT_WORKER=1
+npm run dev:full
+# Finalize a completed tournament in UI → watch payout_job_status → completed
+# Stress ledger idempotency:
+npm run stress:payout-ledger --prefix server
+```
 
 ## `payout_job_status` values
 

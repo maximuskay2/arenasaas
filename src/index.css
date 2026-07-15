@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Arena Grid — world-class esports platform design system */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,90 +8,326 @@
 @layer base {
   :root {
     --font-display: 'Orbitron', system-ui, sans-serif;
-    --font-body: 'Inter', system-ui, sans-serif;
+    --font-body: 'Space Grotesk', 'Inter', system-ui, sans-serif;
 
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
-    --card: 222 40% 9%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 44% 8%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 190 100% 50%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 222 30% 14%;
-    --secondary-foreground: 210 40% 90%;
-    --muted: 222 30% 14%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 348 83% 60%;
+    /* Deep void + electric cyan / hot magenta / gold */
+    --background: 230 35% 4%;
+    --foreground: 210 40% 98%;
+    --card: 230 30% 7%;
+    --card-foreground: 210 40% 98%;
+    --popover: 230 32% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 186 100% 48%;
+    --primary-foreground: 230 35% 4%;
+    --secondary: 230 25% 12%;
+    --secondary-foreground: 210 30% 92%;
+    --muted: 230 22% 11%;
+    --muted-foreground: 215 16% 58%;
+    --accent: 330 90% 58%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 222 30% 18%;
-    --input: 222 30% 18%;
-    --ring: 190 100% 50%;
-    --chart-1: 190 100% 50%;
-    --chart-2: 348 83% 60%;
-    --chart-3: 142 71% 45%;
-    --chart-4: 48 96% 53%;
-    --chart-5: 262 83% 58%;
-    --radius: 0.75rem;
+    --destructive: 0 84% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 20% 16%;
+    --input: 230 20% 14%;
+    --ring: 186 100% 48%;
+    --success: 152 76% 42%;
+    --warning: 42 96% 55%;
+    --gold: 43 96% 56%;
+    --chart-1: 186 100% 48%;
+    --chart-2: 330 90% 58%;
+    --chart-3: 152 76% 42%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 262 83% 62%;
+    --radius: 0.875rem;
 
-    --sidebar-background: 222 44% 8%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 30% 14%;
-    --sidebar-accent-foreground: 210 40% 90%;
-    --sidebar-border: 222 30% 18%;
-    --sidebar-ring: 190 100% 50%;
+    --sidebar-background: 230 35% 5%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 186 100% 48%;
+    --sidebar-primary-foreground: 230 35% 4%;
+    --sidebar-accent: 230 25% 11%;
+    --sidebar-accent-foreground: 210 30% 92%;
+    --sidebar-border: 230 20% 12%;
+    --sidebar-ring: 186 100% 48%;
 
-    --glow-primary: 0 200px 60px -40px hsl(190 100% 50% / 0.15);
-    --glow-accent: 0 200px 60px -40px hsl(348 83% 60% / 0.15);
+    --arena-mesh-1: hsl(186 100% 48% / 0.12);
+    --arena-mesh-2: hsl(330 90% 50% / 0.1);
+    --arena-mesh-3: hsl(262 80% 50% / 0.08);
   }
 
+  /* Explicit dark class (next-themes) — same tokens as :root */
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
-    --card: 222 40% 9%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 44% 8%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 190 100% 50%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 222 30% 14%;
-    --secondary-foreground: 210 40% 90%;
-    --muted: 222 30% 14%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 348 83% 60%;
+    --background: 230 35% 4%;
+    --foreground: 210 40% 98%;
+    --card: 230 30% 7%;
+    --card-foreground: 210 40% 98%;
+    --popover: 230 32% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 186 100% 48%;
+    --primary-foreground: 230 35% 4%;
+    --secondary: 230 25% 12%;
+    --secondary-foreground: 210 30% 92%;
+    --muted: 230 22% 11%;
+    --muted-foreground: 215 16% 58%;
+    --accent: 330 90% 58%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 222 30% 18%;
-    --input: 222 30% 18%;
-    --ring: 190 100% 50%;
-    --chart-1: 190 100% 50%;
-    --chart-2: 348 83% 60%;
-    --chart-3: 142 71% 45%;
-    --chart-4: 48 96% 53%;
-    --chart-5: 262 83% 58%;
-    --sidebar-background: 222 44% 8%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 30% 14%;
-    --sidebar-accent-foreground: 210 40% 90%;
-    --sidebar-border: 222 30% 18%;
-    --sidebar-ring: 190 100% 50%;
+    --destructive: 0 84% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 20% 16%;
+    --input: 230 20% 14%;
+    --ring: 186 100% 48%;
+    --success: 152 76% 42%;
+    --warning: 42 96% 55%;
+    --gold: 43 96% 56%;
+    --chart-1: 186 100% 48%;
+    --chart-2: 330 90% 58%;
+    --chart-3: 152 76% 42%;
+    --chart-4: 43 96% 56%;
+    --chart-5: 262 83% 62%;
+    --sidebar-background: 230 35% 5%;
+    --sidebar-foreground: 210 30% 90%;
+    --sidebar-primary: 186 100% 48%;
+    --sidebar-primary-foreground: 230 35% 4%;
+    --sidebar-accent: 230 25% 11%;
+    --sidebar-accent-foreground: 210 30% 92%;
+    --sidebar-border: 230 20% 12%;
+    --sidebar-ring: 186 100% 48%;
+    --arena-mesh-1: hsl(186 100% 48% / 0.12);
+    --arena-mesh-2: hsl(330 90% 50% / 0.1);
+    --arena-mesh-3: hsl(262 80% 50% / 0.08);
   }
-}
 
-@layer base {
+  .light {
+    --background: 220 30% 98%;
+    --foreground: 230 35% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 230 35% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 35% 8%;
+    --primary: 186 90% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 230 25% 15%;
+    --muted: 220 18% 94%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 330 80% 48%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 16% 88%;
+    --input: 220 16% 90%;
+    --ring: 186 90% 35%;
+    --success: 152 70% 32%;
+    --warning: 38 92% 40%;
+    --gold: 38 92% 42%;
+    --chart-1: 186 90% 35%;
+    --chart-2: 330 80% 48%;
+    --chart-3: 152 70% 32%;
+    --chart-4: 38 92% 42%;
+    --chart-5: 262 70% 48%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 230 25% 15%;
+    --sidebar-primary: 186 90% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 96%;
+    --sidebar-accent-foreground: 230 25% 15%;
+    --sidebar-border: 220 16% 90%;
+    --sidebar-ring: 186 90% 35%;
+    --arena-mesh-1: hsl(186 90% 35% / 0.1);
+    --arena-mesh-2: hsl(330 80% 48% / 0.07);
+    --arena-mesh-3: hsl(262 70% 50% / 0.05);
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    font-feature-settings: "ss01" on, "cv11" on;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Ambient stage behind app shell */
+  .arena-stage {
+    position: relative;
+    isolation: isolate;
+    background-color: hsl(var(--background));
+  }
+
+  .arena-stage::before {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 10% -10%, var(--arena-mesh-1), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 90% 0%, var(--arena-mesh-2), transparent 50%),
+      radial-gradient(ellipse 50% 35% at 50% 100%, var(--arena-mesh-3), transparent 55%),
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(230 35% 3.5%) 100%);
+  }
+
+  .light .arena-stage::before {
+    background:
+      radial-gradient(ellipse 80% 50% at 10% -10%, var(--arena-mesh-1), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 90% 0%, var(--arena-mesh-2), transparent 50%),
+      radial-gradient(ellipse 50% 35% at 50% 100%, var(--arena-mesh-3), transparent 55%),
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(220 28% 95%) 100%);
+  }
+
+  .arena-stage::after {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.35;
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+  }
+
+  .light .arena-stage::after {
+    opacity: 0.5;
+  }
+
+  .arena-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .glass {
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card) / 0.72) 0%,
+      hsl(var(--card) / 0.45) 100%
+    );
+    border: 1px solid hsl(var(--border) / 0.65);
+    box-shadow:
+      0 0 0 1px hsl(0 0% 100% / 0.03) inset,
+      0 12px 40px hsl(0 0% 0% / 0.25);
+  }
+
+  .light .glass {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card) / 0.92) 0%,
+      hsl(var(--card) / 0.78) 100%
+    );
+    border: 1px solid hsl(var(--border) / 0.9);
+    box-shadow:
+      0 0 0 1px hsl(0 0% 100% / 0.85) inset,
+      0 12px 32px hsl(0 0% 0% / 0.06);
+  }
+
+  .glass-hover {
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .glass-hover:hover {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card) / 0.88) 0%,
+      hsl(var(--card) / 0.55) 100%
+    );
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.12) inset,
+      0 16px 48px hsl(0 0% 0% / 0.35),
+      0 0 40px hsl(var(--primary) / 0.08);
+  }
+
+  .light .glass-hover:hover {
+    background: linear-gradient(
+      145deg,
+      hsl(var(--card) / 1) 0%,
+      hsl(var(--secondary) / 0.6) 100%
+    );
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.15) inset,
+      0 16px 40px hsl(0 0% 0% / 0.08),
+      0 0 28px hsl(var(--primary) / 0.08);
+  }
+
+  .panel {
+    @apply rounded-2xl border border-border/60 bg-card/50 backdrop-blur-md;
+    box-shadow: 0 8px 32px hsl(0 0% 0% / 0.2);
+  }
+
+  .panel-elevated {
+    @apply panel;
+    background: linear-gradient(160deg, hsl(var(--card) / 0.9), hsl(var(--secondary) / 0.4));
+  }
+
+  .btn-arena {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-display text-xs font-bold uppercase tracking-wider transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-arena-primary {
+    @apply btn-arena bg-primary text-primary-foreground shadow-lg;
+    box-shadow: 0 0 24px hsl(var(--primary) / 0.35), 0 4px 16px hsl(0 0% 0% / 0.3);
+  }
+
+  .btn-arena-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 0 36px hsl(var(--primary) / 0.5), 0 6px 20px hsl(0 0% 0% / 0.35);
+    transform: translateY(-1px);
+  }
+
+  .section-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground;
+  }
+
+  .live-dot {
+    position: relative;
+    display: inline-flex;
+    height: 0.5rem;
+    width: 0.5rem;
+  }
+
+  .live-dot::before {
+    content: "";
+    position: absolute;
+    display: inline-flex;
+    height: 100%;
+    width: 100%;
+    border-radius: 9999px;
+    background: #ef4444;
+    opacity: 0.75;
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .live-dot::after {
+    content: "";
+    position: relative;
+    display: inline-flex;
+    height: 0.5rem;
+    width: 0.5rem;
+    border-radius: 9999px;
+    background: #ef4444;
+  }
+
+  .nav-item-active {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.18), hsl(var(--primary) / 0.04));
+    box-shadow: inset 3px 0 0 hsl(var(--primary));
   }
 }
 
@@ -98,49 +335,114 @@
   .font-display {
     font-family: var(--font-display);
   }
+
   .font-body {
     font-family: var(--font-body);
   }
-  .glass {
-    backdrop-filter: blur(16px);
-    background: hsl(var(--card) / 0.6);
-    border: 1px solid hsl(var(--border) / 0.5);
-  }
-  .glass-hover:hover {
-    background: hsl(var(--card) / 0.8);
-    border-color: hsl(var(--primary) / 0.3);
-  }
+
   .glow-primary {
-    box-shadow: 0 0 30px hsl(var(--primary) / 0.2), 0 0 60px hsl(var(--primary) / 0.1);
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.22), 0 0 60px hsl(var(--primary) / 0.1);
   }
+
   .glow-accent {
-    box-shadow: 0 0 30px hsl(var(--accent) / 0.2), 0 0 60px hsl(var(--accent) / 0.1);
+    box-shadow: 0 0 30px hsl(var(--accent) / 0.22), 0 0 60px hsl(var(--accent) / 0.1);
   }
+
   .glow-border-primary {
-    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.3), 0 0 20px hsl(var(--primary) / 0.15);
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--primary) / 0.35),
+      0 0 24px hsl(var(--primary) / 0.12);
   }
+
   .text-gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(186 100% 70%) 40%, hsl(var(--accent)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #fbbf24, #fde68a, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
   .bg-gradient-surface {
     background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--card)));
   }
+
+  .bg-gradient-hero {
+    background:
+      radial-gradient(ellipse 90% 60% at 50% -20%, hsl(var(--primary) / 0.2), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 100% 50%, hsl(var(--accent) / 0.12), transparent 50%),
+      hsl(var(--background));
+  }
+
   .animate-pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
+    animation: pulse-glow 2.4s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float-y 6s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 3s linear infinite;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
   }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px hsl(var(--primary) / 0.2); }
-  50% { box-shadow: 0 0 40px hsl(var(--primary) / 0.4); }
+  0%,
+  100% {
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.18);
+  }
+  50% {
+    box-shadow: 0 0 36px hsl(var(--primary) / 0.4);
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
 }
 
 @keyframes trophy-shine {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes arenaTickerMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 .trophy-shine-gold {
@@ -156,17 +458,21 @@
   animation: trophy-shine 4s ease-in-out infinite;
 }
 
-/* Scrollbar styling */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: hsl(var(--background));
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--border));
-  border-radius: 3px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
+  background: hsl(var(--muted-foreground) / 0.5);
+  background-clip: padding-box;
 }

@@ -45,6 +45,7 @@ import PageHeader from "../components/shared/PageHeader";
 import { useAuth } from "@/lib/AuthContext";
 import LoadingSpinner from "../components/shared/LoadingSpinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 function EditTemplateForm({ template, onSave, onCancel, pending }) {
   const [title, setTitle] = useState(template.title || "");
@@ -139,24 +140,24 @@ function apiBasePath(path) {
 
 const LARGE_PAYOUT_USD = 1000;
 
-const CS_SHELL = "min-h-screen bg-gradient-to-b from-background via-background to-muted/20";
-const CS_CONTAINER = "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-24 pt-4 sm:pt-6";
+const CS_SHELL = "min-h-screen arena-stage";
+const CS_CONTAINER = "arena-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 pb-24 pt-4 sm:pt-6";
 const CS_HERO =
-  "relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-br from-card/85 via-background to-primary/[0.09] p-6 md:p-8 shadow-xl shadow-black/20";
+  "relative overflow-hidden rounded-3xl glass border border-primary/25 p-6 md:p-8 shadow-arena";
 const CS_HERO_GLOW_BEFORE =
-  "pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-primary/20 blur-3xl";
+  "pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-primary/25 blur-3xl";
 const CS_HERO_GLOW_AFTER =
   "pointer-events-none absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-accent/15 blur-3xl";
 const CS_TAB_WRAP =
-  "sticky top-0 z-20 -mx-4 border-b border-border/50 bg-background/85 px-4 py-3 backdrop-blur-md sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none";
+  "sticky top-0 z-20 -mx-4 border-b border-border/50 bg-background/80 px-4 py-3 backdrop-blur-xl sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none";
 const CS_TAB_LIST =
-  "inline-flex h-auto w-full flex-wrap gap-1.5 justify-start rounded-xl border border-border/60 bg-secondary/40 p-1.5 shadow-inner backdrop-blur-sm sm:w-auto";
+  "inline-flex h-auto w-full flex-wrap gap-1.5 justify-start rounded-2xl glass border border-border/50 p-1.5 shadow-arena-card sm:w-auto";
 const CS_TAB_TRIGGER =
-  "gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition-all duration-200 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
+  "gap-2 rounded-xl px-3.5 py-2 text-[10px] font-display font-bold uppercase tracking-wider transition-all duration-200 sm:text-xs data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:ring-1 data-[state=active]:ring-primary/30 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
 const CS_STAT_CARD =
-  "group relative overflow-hidden rounded-xl border border-border/55 bg-gradient-to-br from-card/60 to-card/30 p-5 shadow-sm transition-all duration-300 hover:border-primary/35 hover:shadow-lg hover:shadow-primary/10";
+  "group relative overflow-hidden rounded-2xl glass border border-border/50 p-5 shadow-arena-card transition-all duration-300 hover:border-primary/40 hover:shadow-arena-glow";
 const CS_PANEL =
-  "glass rounded-xl border border-border/50 shadow-md shadow-black/15 transition-all duration-200 hover:border-primary/25 hover:shadow-lg hover:shadow-primary/5";
+  "glass rounded-2xl border border-border/50 shadow-arena-card transition-all duration-200 hover:border-primary/25";
 
 /**
  * Platform Super Admin — "Central Station" (admin host / simulate admin entry).
@@ -701,7 +702,7 @@ export default function SystemAdmin() {
 
   const vaultKeySet = useMemo(() => new Set((vaultSecrets?.keys || []).map((k) => k.key_name)), [vaultSecrets]);
 
-  if (tenantsLoading) return <LoadingSpinner />;
+  if (tenantsLoading) return <LoadingSpinner label="Loading Central Station…" />;
 
   return (
     <div className={CS_SHELL}>
@@ -711,28 +712,34 @@ export default function SystemAdmin() {
           <div className={CS_HERO_GLOW_AFTER} aria-hidden />
           <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4 min-w-0 flex-1">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-widest text-primary">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-widest text-primary">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                Control plane
+                Control plane · Platform admin
               </div>
               <PageHeader
-                title="Central Station"
+                eyebrow="God view"
+                title={
+                  <>
+                    Central <span className="text-gradient-primary">Station</span>
+                  </>
+                }
                 subtitle="Platform pulse, tenants, security hardening, infrastructure, and financial controls — one console for operators."
                 className="mb-0"
                 actions={
                   <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                    <Button variant="outline" size="sm" onClick={() => logout()} className="gap-2 border-border/80 bg-background/50 hover:bg-background">
+                    <ThemeToggle variant="menu" />
+                    <Button variant="outline" size="sm" onClick={() => logout()} className="gap-2">
                       <LogOut className="w-4 h-4" /> Log out
                     </Button>
                     <Button
                       size="sm"
-                      variant={platformMaintenance ? "destructive" : "default"}
-                      className={platformMaintenance ? "gap-2" : "gap-2 bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90"}
+                      variant={platformMaintenance ? "destructive" : "arena"}
+                      className="gap-2"
                       onClick={() => savePlatformMutation.mutate({ platform_maintenance: !platformMaintenance })}
                       disabled={savePlatformMutation.isPending}
                     >
                       <ToggleRight className="w-4 h-4" />{" "}
-                      {platformMaintenance ? "Maintenance ON — click to restore" : "Platform maintenance"}
+                      {platformMaintenance ? "Maintenance ON — restore" : "Platform maintenance"}
                     </Button>
                   </div>
                 }
@@ -742,7 +749,7 @@ export default function SystemAdmin() {
         </header>
 
         <div className={`${CS_PANEL} p-4 md:p-5`}>
-          <p className="font-display font-semibold text-foreground flex items-center gap-2 text-sm tracking-tight">
+          <p className="font-display text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
             <Shield className="w-4 h-4 text-primary shrink-0" /> Security &amp; ops checklist
           </p>
           <p className="text-xs text-muted-foreground mt-2 leading-relaxed max-w-4xl">

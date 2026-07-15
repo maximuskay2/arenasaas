@@ -23,6 +23,7 @@ import { maxikay } from "@/api/maxikayClient";
 import { getOrganizerPortalOrigin } from "@/lib/routingLogic";
 import { useAuth } from "@/lib/AuthContext";
 import LiveMatchTicker from "@/components/layout/LiveMatchTicker";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 function SectionNavLink({ id, className, children, onNavigate = () => {} }) {
   const { pathname } = useLocation();
@@ -107,13 +108,16 @@ export default function PublicSiteHeader() {
 
       <LiveMatchTicker />
 
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-display text-lg font-bold text-primary-foreground shadow-sm">
-              🎮
+          <Link to="/" className="flex items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/40 to-accent/30 ring-1 ring-primary/35 shadow-arena-glow font-display text-sm font-bold text-primary">
+              A
             </div>
-            <span className="font-display text-lg font-bold tracking-tight">ArenaSaaS</span>
+            <div className="leading-tight">
+              <span className="font-display text-sm font-bold tracking-[0.16em]">ARENA</span>
+              <span className="hidden sm:block text-[10px] text-muted-foreground font-medium">Esports OS</span>
+            </div>
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex lg:gap-2" aria-label="Primary">
@@ -131,6 +135,9 @@ export default function PublicSiteHeader() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to="/rankings">Power rankings</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/watch">Watch live</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link to={isAuthenticated ? "/matches" : "/login"}>Match center</Link>
@@ -175,7 +182,8 @@ export default function PublicSiteHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button variant="outline" size="sm" asChild className="ml-1 shrink-0">
+            <ThemeToggle variant="menu" className="ml-1" />
+            <Button variant="outline" size="sm" asChild className="shrink-0">
               <a href={organizerLoginUrl}>Login</a>
             </Button>
             <Button size="sm" className="shrink-0" onClick={() => navigate("/register")}>
@@ -183,12 +191,13 @@ export default function PublicSiteHeader() {
             </Button>
           </nav>
 
-          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <div className="flex items-center gap-1 md:hidden">
+            <ThemeToggle variant="icon" />
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden"
                 aria-label="Open navigation menu"
               >
                 <Menu className="h-5 w-5" />
@@ -294,6 +303,10 @@ export default function PublicSiteHeader() {
                 >
                   Login
                 </a>
+                <div className="mt-4 flex items-center justify-between gap-2 px-1 border-t border-border/40 pt-4">
+                  <span className="text-xs text-muted-foreground">Appearance</span>
+                  <ThemeToggle variant="menu" showLabel />
+                </div>
                 <Button
                   className="mt-4 w-full"
                   onClick={() => {
@@ -306,6 +319,7 @@ export default function PublicSiteHeader() {
               </nav>
             </SheetContent>
           </Sheet>
+          </div>
         </div>
       </header>
     </>

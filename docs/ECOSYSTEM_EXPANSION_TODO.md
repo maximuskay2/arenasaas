@@ -6,7 +6,7 @@
 
 **Suggested build order:** Elo → Match Center → Career Archives → Pick’Em (see bottom).
 
-**Status:** Items in §§1–4 are **shipped** in-repo. §5 is **optional depth** (not required for parity with the original checklist).
+**Status:** Items in §§1–4 are **shipped** in-repo. §5 depth largely shipped: `elo_tier` + K max, multi-stream table/API/UI, player Elo + rankings tab, richer match feed types + Discord webhook. Bracket-tree Pick’Em UI remains optional polish.
 
 ---
 

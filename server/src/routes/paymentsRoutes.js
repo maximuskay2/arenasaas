@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { runWithRls, rlsContextFromRequest } from '../rls/transaction.js';
 import {
   fulfillStripeCheckoutSession,
+  fulfillCheckoutMetadata,
   applyStripeSubscriptionUpdated,
   applyStripeSubscriptionDeleted,
   applyStripeInvoicePaid,
@@ -444,6 +445,59 @@ router.post('/subscription-cancel-at-period-end', requireAuth, async (req, res) 
     res.json({ ok: true, cancel_at_period_end: cancelAtEnd });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/**
+ * Local/dev only: insert a completed entry_fee ledger row so paid join E2E works without provider keys.
+ * Blocked when NODE_ENV=production.
+ */
+router.post('/dev-simulate-entry', requireAuth, async (req, res) => {
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const tournament_id = String(req.body?.tournament_id || '').trim();
+  const amount = Number(req.body?.amount);
+  const currency = String(req.body?.currency || 'USD').trim().toUpperCase() || 'USD';
+  const provider = String(req.body?.provider || 'dev').slice(0, 32);
+  const captain_email = String(req.body?.captain_email || req.user?.email || '')
+    .trim()
+    .toLowerCase();
+  if (!tournament_id) return res.status(400).json({ error: 'tournament_id required' });
+
+  try {
+    const out = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const { rows } = await client.query(
+        `SELECT id, tenant_id, entry_type, entry_fee, currency FROM tournaments WHERE id::text = $1`,
+        [tournament_id]
+      );
+      const t = rows[0];
+      if (!t) return { error: 'not_found', status: 404 };
+      const fee = effectiveEntryFee(t);
+      const major = Number.isFinite(amount) && amount > 0 ? amount : fee;
+      if (!(major > 0)) return { error: 'fee_zero', status: 400 };
+      const ref =
+        String(req.body?.reference || '').trim() ||
+        `dev_entry_${tournament_id.slice(0, 8)}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const fulfilled = await fulfillCheckoutMetadata(client, {
+        meta: {
+          tenant_id: String(t.tenant_id),
+          tournament_id: String(t.id),
+          checkout_kind: 'registration',
+          payer_email: captain_email,
+        },
+        amountMajor: major,
+        currency: currency || String(t.currency || 'USD').toUpperCase(),
+        ledgerReference: ref,
+        provider,
+      });
+      return { ok: true, reference: ref, provider, ...fulfilled };
+    });
+    if (out?.status) return res.status(out.status).json({ error: out.error });
+    res.json(out);
+  } catch (e) {
+    console.error('[dev-simulate-entry]', e);
     res.status(500).json({ error: clientSafeErrorMessage(e) });
   }
 });

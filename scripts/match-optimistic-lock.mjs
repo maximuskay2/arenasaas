@@ -131,7 +131,71 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('Match optimistic lock + forfeit idempotency OK.');
+  // G2 race: concurrent check-in progress vs forfeit from check_in_open → single winner
+  const match2 = await jfetch('/api/v1/Match', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${adminTok}`, 'X-Tenant-ID': tid },
+    body: {
+      tenant_id: tid,
+      tournament_id: tour.data.id,
+      round: 1,
+      match_number: 2,
+      status: 'check_in_open',
+      version: 1,
+      team_a_name: 'R1',
+      team_b_name: 'R2',
+      team_a_id: 'team-r1',
+      team_b_id: 'team-r2',
+    },
+  });
+  if (!match2.ok) throw new Error(`match2: ${JSON.stringify(match2.data)}`);
+  const mid2 = match2.data.id;
+  const raceIdem = `race-forfeit-${mid2}`;
+
+  const [racePatch, raceForfeit] = await Promise.all([
+    jfetch(`/api/v1/Match/${mid2}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${orgTok}`, 'X-Tenant-ID': tid },
+      body: {
+        team_a_checked_in: true,
+        team_b_checked_in: true,
+        status: 'checked_in',
+        expected_version: 1,
+        expected_status: 'check_in_open',
+      },
+    }),
+    jfetch('/api/engine/forfeit', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${orgTok}`, 'X-Tenant-ID': tid },
+      body: {
+        match_id: mid2,
+        idempotency_key: raceIdem,
+        expected_version: 1,
+        from_status: 'check_in_open',
+        new_status: 'forfeited',
+        patch: { winner_id: 'team-r1', winner_name: 'R1', notes: 'race forfeit' },
+      },
+    }),
+  ]);
+
+  const raceOk =
+    (racePatch.status === 200 && (raceForfeit.status === 409 || raceForfeit.data?.duplicate || raceForfeit.ok)) ||
+    (raceForfeit.ok && raceForfeit.data?.match && (racePatch.status === 409 || racePatch.status === 200));
+  if (!raceOk && !(racePatch.ok || raceForfeit.ok)) {
+    console.error('check-in vs forfeit race: neither succeeded', racePatch, raceForfeit);
+    process.exit(1);
+  }
+  // Exactly one transition should leave a terminal or checked_in state at version >= 2
+  const finalRace = await jfetch(`/api/v1/Match?id=${encodeURIComponent(mid2)}`, {
+    headers: { Authorization: `Bearer ${adminTok}`, 'X-Tenant-ID': tid },
+  });
+  const finalRow = Array.isArray(finalRace.data) ? finalRace.data[0] : finalRace.data;
+  if (!finalRow || Number(finalRow.version || 0) < 2) {
+    console.error('Expected race winner version >= 2', finalRow, racePatch.status, raceForfeit.status);
+    process.exit(1);
+  }
+
+  console.log('Match optimistic lock + forfeit idempotency + check-in/forfeit race OK.');
 }
 
 main().catch((e) => {

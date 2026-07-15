@@ -15,9 +15,13 @@ This phase is the **Transaction Layer**: the platform facilitates competition en
 ### Still open (product / hardening)
 
 - [ ] **Inline Stripe / Paystack / Flutterwave** PaymentIntent or charge **creation** inside the same HTTP handler as join (today: **ledger reference verification** after checkout or webhook writes the row).
-- [ ] **Rank / region / ban** eligibility rules for join.
-- [ ] **Production email** (SMTP/SendGrid) replacing stub logging.
+- [x] **Rank / region / ban** eligibility rules for join (`joinEligibility.js` + creator fields + join modal).
+- [x] **Join confirmation email** via `sendPlatformEmail` (configure `MAIL_FROM` / Central Station email settings).
 - [x] **Server-driven Stripe Connect status** — `GET /api/payments/stripe-connect-status` (charges / payouts / onboarding flags; server-only Stripe API).
+- [x] **Checkout return auto-verify + join modal bootstrap** + sessionStorage payment refs.
+- [x] **Dev simulate entry** (`POST /api/payments/dev-simulate-entry`) + client 503 ledger fallback.
+- [x] **Verify-on-join** (provider live verify inside join when ledger missing).
+- [x] **One payment / one captain seat** + `npm run test:paid-join`.
 
 ---
 
@@ -60,7 +64,7 @@ This phase is the **Transaction Layer**: the platform facilitates competition en
 - [x] **Individual (1v1)** — `mode: solo` when `roster_size <= 1`
 - [x] **Team** — captain + roster; **game IDs** per teammate when roster &gt; 1 (client + server)
 - [x] **HWID ban** (optional `client_hwid` on join)
-- [ ] **Rank / region** eligibility — rules TBD
+- [x] **Rank / region** eligibility — `allowed_regions`, `min_team_elo`, `require_game_handle`
 - [x] **Paid entry** — ledger + `payment_proof` (reference + provider)
 - [x] **FCM** enqueue on join (stub worker)
 - [x] **Email** — structured stub / log path (`integrations` + server log)

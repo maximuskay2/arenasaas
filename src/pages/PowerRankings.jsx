@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { maxikay } from "@/api/maxikayClient";
 import PageHeader from "@/components/shared/PageHeader";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
-import { TrendingUp, TrendingDown, Minus, Crown, Shield } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Crown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function PowerRankings() {
+  const [kind, setKind] = useState("team");
   const { data, isLoading } = useQuery({
-    queryKey: ["power-rankings"],
-    queryFn: () => maxikay.public.powerRankings({ limit: 100 }),
+    queryKey: ["power-rankings", kind],
+    queryFn: () => maxikay.public.powerRankings({ limit: 100, kind }),
   });
 
   const rows = data?.rankings || [];
@@ -16,14 +19,37 @@ export default function PowerRankings() {
     <div className="max-w-5xl mx-auto space-y-6 px-4 py-8 pb-24">
       <PageHeader
         title="Power rankings"
-        subtitle="Global Elo — every bracket result shapes the prestige ladder."
+        subtitle="Global Elo — teams and solo players. Prestige from every completed match."
       />
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={kind === "team" ? "default" : "outline"}
+          className="font-display text-xs uppercase tracking-wider"
+          onClick={() => setKind("team")}
+        >
+          Teams
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={kind === "player" ? "default" : "outline"}
+          className="font-display text-xs uppercase tracking-wider"
+          onClick={() => setKind("player")}
+        >
+          Players (1v1)
+        </Button>
+      </div>
 
       {isLoading ? (
         <LoadingSpinner />
       ) : rows.length === 0 ? (
         <p className="text-center text-muted-foreground py-16 text-sm">
-          No rated teams yet. Elo updates when matches are completed or forfeited.
+          {kind === "player"
+            ? "No rated solo players yet. Player Elo updates after completed 1v1 matches."
+            : "No rated teams yet. Elo updates when matches are completed or forfeited."}
         </p>
       ) : (
         <div className="rounded-2xl border border-border/60 overflow-hidden bg-secondary/10">
@@ -32,7 +58,7 @@ export default function PowerRankings() {
               <thead>
                 <tr className="border-b border-border/60 bg-secondary/40 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="p-3 w-12">#</th>
-                  <th className="p-3">Team</th>
+                  <th className="p-3">{kind === "player" ? "Player" : "Team"}</th>
                   <th className="p-3">Elo</th>
                   <th className="p-3">Record</th>
                   <th className="p-3">Trend</th>

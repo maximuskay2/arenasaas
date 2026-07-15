@@ -1,15 +1,25 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getEffectiveHubMode, isLeagueHostUser, setHubPreference } from "@/lib/routingLogic";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   LayoutDashboard, Trophy, Swords, Users, Gamepad2,
-  Settings, ScrollText, ChevronLeft, ChevronRight, Shield, Wallet, BarChart2, Compass, UserSearch, Star, ClipboardList, Sun, Moon, LogOut, Clock, Megaphone, Gavel, MessageSquare, Flame
+  Settings, ScrollText, ChevronLeft, ChevronRight, Shield, Wallet, BarChart2, Compass, UserSearch, Star, ClipboardList, LogOut, Clock, Megaphone, Gavel, MessageSquare, Flame, Zap, Activity, Tv
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/lib/AuthContext";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
-
+function NavSection({ title, collapsed, children }) {
+  return (
+    <div className="mb-3">
+      {!collapsed && (
+        <p className="section-label px-3 mb-1.5 select-none">{title}</p>
+      )}
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
 
 export default function Sidebar() {
   const location = useLocation();
@@ -19,48 +29,75 @@ export default function Sidebar() {
   const { logout, user } = useAuth();
   const host = isLeagueHostUser(user);
   const hubMode = getEffectiveHubMode(user);
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("light", theme === "light");
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const organizerNavItems = [
-    { path: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/tournaments", icon: Compass, label: "Discover" },
-    { path: "/rankings", icon: Flame, label: "Power ranks" },
-    { path: "/community", icon: MessageSquare, label: "Community" },
-    { path: "/league/tournaments", icon: Trophy, label: "My tournaments" },
-    { path: "/free-agents", icon: UserSearch, label: "Free Agents" },
-    { path: "/sponsorships", icon: Star, label: "Sponsorships" },
-    { path: "/sponsor-insights", icon: Megaphone, label: "Sponsor insight" },
-    { path: "/matches", icon: Swords, label: "Matches" },
-    { path: "/league/disputes", icon: Gavel, label: "Disputes" },
-    { path: "/teams", icon: Users, label: "Teams" },
-    { path: "/games", icon: Gamepad2, label: "Game Templates" },
-    { path: "/wallet", icon: Wallet, label: "Wallet" },
-    { path: "/revenue", icon: BarChart2, label: "Revenue Report" },
-    { path: "/audit-log", icon: ScrollText, label: "Audit Log" },
-    { path: "/settings", icon: Settings, label: "Settings" },
-    { path: "/dev-todos", icon: ClipboardList, label: "Dev Todos" },
-    ...(isSuperAdmin ? [{ path: "/super-admin", icon: Shield, label: "Super Admin", accent: true }] : []),
+  const organizerSections = [
+    {
+      title: "Compete",
+      items: [
+        { path: "/", icon: LayoutDashboard, label: "Command center" },
+        { path: "/league/ops", icon: Activity, label: "Ops board" },
+        { path: "/tournaments", icon: Compass, label: "Discover" },
+        { path: "/watch", icon: Tv, label: "Watch live" },
+        { path: "/rankings", icon: Flame, label: "Power ranks" },
+        { path: "/community", icon: MessageSquare, label: "Community" },
+        { path: "/matches", icon: Swords, label: "Match center" },
+      ],
+    },
+    {
+      title: "League ops",
+      items: [
+        { path: "/league/tournaments", icon: Trophy, label: "My tournaments" },
+        { path: "/teams", icon: Users, label: "Teams" },
+        { path: "/league/disputes", icon: Gavel, label: "Disputes" },
+        { path: "/games", icon: Gamepad2, label: "Game templates" },
+        { path: "/free-agents", icon: UserSearch, label: "Free agents" },
+      ],
+    },
+    {
+      title: "Business",
+      items: [
+        { path: "/wallet", icon: Wallet, label: "Wallet" },
+        { path: "/revenue", icon: BarChart2, label: "Revenue" },
+        { path: "/sponsorships", icon: Star, label: "Sponsorships" },
+        { path: "/sponsor-insights", icon: Megaphone, label: "Sponsor insight" },
+      ],
+    },
+    {
+      title: "System",
+      items: [
+        { path: "/audit-log", icon: ScrollText, label: "Audit log" },
+        { path: "/settings", icon: Settings, label: "Settings" },
+        { path: "/dev-todos", icon: ClipboardList, label: "Dev todos" },
+        ...(isSuperAdmin ? [{ path: "/super-admin", icon: Shield, label: "Super admin", accent: true }] : []),
+      ],
+    },
   ];
 
-  const playerNavItems = [
-    { path: "/dashboard", icon: LayoutDashboard, label: "Home" },
-    { path: "/dashboard/matches", icon: Swords, label: "My matches" },
-    { path: "/dashboard/teams", icon: Users, label: "My teams" },
-    { path: "/dashboard/wallet", icon: Wallet, label: "Wallet" },
-    { path: "/dashboard/settings", icon: Settings, label: "Hub settings" },
-    { path: "/tournaments", icon: Compass, label: "Discover" },
-    { path: "/rankings", icon: Flame, label: "Power ranks" },
-    { path: "/community", icon: MessageSquare, label: "Community" },
-    { path: "/matches", icon: Swords, label: "All matches" },
-    { path: "/check-in", icon: Clock, label: "Check-in" },
+  const playerSections = [
+    {
+      title: "Career",
+      items: [
+        { path: "/dashboard", icon: LayoutDashboard, label: "Home" },
+        { path: "/dashboard/matches", icon: Swords, label: "My matches" },
+        { path: "/dashboard/teams", icon: Users, label: "My teams" },
+        { path: "/dashboard/wallet", icon: Wallet, label: "Vault" },
+        { path: "/check-in", icon: Clock, label: "Check-in" },
+      ],
+    },
+    {
+      title: "Arena",
+      items: [
+        { path: "/tournaments", icon: Compass, label: "Discover" },
+        { path: "/watch", icon: Tv, label: "Watch live" },
+        { path: "/rankings", icon: Flame, label: "Power ranks" },
+        { path: "/community", icon: MessageSquare, label: "Community" },
+        { path: "/matches", icon: Swords, label: "All matches" },
+        { path: "/dashboard/settings", icon: Settings, label: "Hub settings" },
+      ],
+    },
   ];
 
-  const allNavItems = hubMode === "player" ? playerNavItems : organizerNavItems;
+  const sections = hubMode === "player" ? playerSections : organizerSections;
 
   const itemIsActive = (itemPath) => {
     const p = location.pathname;
@@ -71,73 +108,76 @@ export default function Sidebar() {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 72 : 260 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
-      className="h-screen sticky top-0 flex flex-col glass border-r border-border/50 z-50"
+      animate={{ width: collapsed ? 76 : 272 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="h-screen sticky top-0 flex flex-col z-50 border-r border-sidebar-border/80 bg-sidebar/90 backdrop-blur-xl shadow-arena"
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Shield className="w-5 h-5 text-primary" />
+      {/* Brand */}
+      <div className="flex items-center gap-3 px-4 h-[4.25rem] border-b border-sidebar-border/70">
+        <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-primary/30 to-accent/20 flex items-center justify-center flex-shrink-0 ring-1 ring-primary/30 shadow-arena-glow">
+          <Zap className="w-5 h-5 text-primary" />
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary animate-pulse" />
         </div>
         <AnimatePresence>
           {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "auto" }}
-              exit={{ opacity: 0, width: 0 }}
-              className="font-display text-sm font-bold tracking-wider text-foreground whitespace-nowrap overflow-hidden"
+            <motion.div
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -6 }}
+              className="min-w-0 overflow-hidden"
             >
-              ARENA
-            </motion.span>
+              <p className="font-display text-[13px] font-bold tracking-[0.18em] text-foreground leading-none">
+                ARENA
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-1 font-medium tracking-wide">
+                Grid · Esports OS
+              </p>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
-        {allNavItems.map((item) => {
-          const isActive = itemIsActive(item.path);
-          return (
-            <Link key={item.path} to={item.path}>
-              <motion.div
-                whileHover={{ x: 2 }}
-                whileTap={{ scale: 0.98 }}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative
-                  ${isActive 
-                    ? "text-primary bg-primary/10" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"}
-                `}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-lg bg-primary/10 glow-border-primary"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                  />
-                )}
-                <item.icon className="w-5 h-5 flex-shrink-0 relative z-10" />
-                <AnimatePresence>
-                  {!collapsed && (
-                    <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="text-sm font-medium relative z-10 whitespace-nowrap"
-                    >
-                      {item.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            </Link>
-          );
-        })}
+      {/* Nav */}
+      <nav className="flex-1 py-4 px-2.5 overflow-y-auto scrollbar-thin">
+        {sections.map((section) => (
+          <NavSection key={section.title} title={section.title} collapsed={collapsed}>
+            {section.items.map((item) => {
+              const isActive = itemIsActive(item.path);
+              return (
+                <Link key={item.path} to={item.path} title={collapsed ? item.label : undefined}>
+                  <div
+                    className={`
+                      group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative
+                      ${isActive
+                        ? "text-primary nav-item-active"
+                        : item.accent
+                          ? "text-accent hover:bg-accent/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/80"}
+                    `}
+                  >
+                    <item.icon className={`w-[1.15rem] h-[1.15rem] flex-shrink-0 relative z-10 ${isActive ? "drop-shadow-[0_0_8px_hsl(var(--primary)/0.6)]" : ""}`} />
+                    <AnimatePresence>
+                      {!collapsed && (
+                        <motion.span
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="text-[13px] font-medium relative z-10 whitespace-nowrap"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </Link>
+              );
+            })}
+          </NavSection>
+        ))}
       </nav>
 
       {host && (
-        <div className="px-2 py-2 border-t border-border/40">
+        <div className="px-2.5 py-2 border-t border-sidebar-border/60">
           <button
             type="button"
             onClick={() => {
@@ -149,56 +189,45 @@ export default function Sidebar() {
                 navigate("/dashboard");
               }
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-secondary/60 hover:text-foreground"
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground transition hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20"
           >
-            {hubMode === "player" ? "League organizer view" : "Player hub (compete)"}
+            <Shield className="w-4 h-4 shrink-0" />
+            {!collapsed && (hubMode === "player" ? "Organizer mode" : "Player mode")}
           </button>
         </div>
       )}
 
-      {/* Impersonation banner */}
       {isImpersonating && (
-        <div className="mx-2 mb-1 px-2 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30">
-          <p className="text-[10px] text-orange-400 font-semibold text-center">🎭 Impersonating</p>
+        <div className="mx-2.5 mb-1 px-2 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30">
+          <p className="text-[10px] text-orange-400 font-semibold text-center">Impersonating</p>
         </div>
       )}
 
-      {/* Log out */}
-      <div className="px-2 pb-1">
+      <div className="px-2.5 pb-1">
         <button
           type="button"
           onClick={() => logout()}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive`}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           title="Sign out"
         >
           <LogOut className="h-5 w-5 shrink-0" />
           <AnimatePresence>
             {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="whitespace-nowrap"
-              >
-                Log out
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="whitespace-nowrap">
+                Sign out
               </motion.span>
             )}
           </AnimatePresence>
         </button>
       </div>
 
-      {/* Theme toggle + Collapse */}
-      <div className="p-2 border-t border-border/50 flex gap-1">
+      <div className="p-2.5 border-t border-sidebar-border/60 flex gap-1 items-center">
+        <ThemeToggle variant="menu" className="w-10 h-10 rounded-xl" />
         <button
-          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-          className="flex items-center justify-center w-9 h-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
-        <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex-1 flex items-center justify-center py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+          className="flex-1 flex items-center justify-center py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>

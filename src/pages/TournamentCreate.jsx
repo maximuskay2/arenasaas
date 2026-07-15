@@ -62,6 +62,16 @@ function pickDraftPatch(f) {
     rules: f.rules?.trim() || undefined,
     prize_structure: Object.keys(buildPrizeStructurePayload(f)).length ? buildPrizeStructurePayload(f) : undefined,
     prize_disclosure_tbd: !!f.prize_tbd,
+    allowed_regions: f.allowed_regions_csv
+      ? f.allowed_regions_csv
+          .split(/[,|]/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+      : [],
+    min_team_elo: f.min_team_elo !== "" && f.min_team_elo != null ? Number(f.min_team_elo) : null,
+    require_game_handle: !!f.require_game_handle,
+    eligibility_notes: f.eligibility_notes?.trim() || undefined,
+    elo_tier: f.elo_tier && f.elo_tier !== "none" ? f.elo_tier : null,
   };
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ""));
 }
@@ -132,6 +142,11 @@ export default function TournamentCreate() {
       { rank: 2, payout: 200, percent: 30, badge_id: "silver_finalist" },
       { rank: 3, payout: 100, percent: 20, badge_id: "bronze_competitor" },
     ],
+    allowed_regions_csv: "",
+    min_team_elo: "",
+    require_game_handle: false,
+    eligibility_notes: "",
+    elo_tier: "none",
   });
 
   const { data: gamePlatforms = [] } = useQuery({
@@ -418,21 +433,28 @@ export default function TournamentCreate() {
 
   if (isBlocked) {
     return (
-      <div className="max-w-2xl mx-auto pb-20 md:pb-0">
+      <div className="max-w-2xl mx-auto pb-20 md:pb-8">
         <PageHeader
-          title="Create Tournament"
+          eyebrow="Creator"
+          title={
+            <>
+              Create <span className="text-gradient-primary">tournament</span>
+            </>
+          }
           actions={
             <Button variant="ghost" onClick={() => navigate("/league/tournaments")} className="gap-2">
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
           }
         />
-        <div className="glass rounded-xl p-8 text-center space-y-3">
-          <p className="text-2xl">🔒</p>
-          <h3 className="font-display font-bold text-foreground">
-            {entitlement && !entitlement.is_active ? "Subscription Inactive" : "No Tournament Credits"}
+        <div className="glass rounded-3xl p-8 md:p-10 text-center space-y-4 border border-border/50 shadow-arena">
+          <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-500/15 ring-1 ring-amber-500/30 flex items-center justify-center text-2xl">
+            🔒
+          </div>
+          <h3 className="font-display font-bold text-lg text-foreground">
+            {entitlement && !entitlement.is_active ? "Subscription inactive" : "No tournament credits"}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
             {entitlement?.plan_type === "one_shot"
               ? "You have no remaining one-shot tournament credits."
               : "Your subscription is inactive. Please renew to create tournaments."}
@@ -443,10 +465,15 @@ export default function TournamentCreate() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto pb-20 md:pb-0">
+    <div className="max-w-2xl mx-auto pb-20 md:pb-8">
       <PageHeader
-        title="Create Tournament"
-        subtitle="Step-by-step wizard"
+        eyebrow="Creator wizard"
+        title={
+          <>
+            Create <span className="text-gradient-primary">tournament</span>
+          </>
+        }
+        subtitle={`Step ${step + 1} of ${STEPS.length} · ${STEPS[step]} · drafts autosave after step 1`}
         actions={
           <Button variant="ghost" onClick={() => navigate("/league/tournaments")} className="gap-2">
             <ArrowLeft className="w-4 h-4" /> Back
@@ -454,26 +481,43 @@ export default function TournamentCreate() {
         }
       />
 
-      <div className="flex gap-1 mb-6 overflow-x-auto pb-1">
-        {STEPS.map((label, i) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => setStep(i)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-display font-bold uppercase tracking-wider whitespace-nowrap border ${
-              i === step ? "border-primary bg-primary/15 text-primary" : "border-border/60 text-muted-foreground"
-            }`}
-          >
-            {i < step ? <Check className="w-3 h-3" /> : <span className="opacity-60">{i + 1}</span>}
-            {label}
-          </button>
-        ))}
+      {/* Progress rail */}
+      <div className="mb-6">
+        <div className="h-1.5 rounded-full bg-secondary overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-300"
+            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+          />
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {STEPS.map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setStep(i)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-display font-bold uppercase tracking-wider whitespace-nowrap border transition-all ${
+                i === step
+                  ? "border-primary/50 bg-primary/15 text-primary shadow-arena-glow"
+                  : i < step
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-border/60 text-muted-foreground hover:border-border"
+              }`}
+            >
+              {i < step ? (
+                <Check className="w-3 h-3" />
+              ) : (
+                <span className="opacity-70 tabular-nums">{i + 1}</span>
+              )}
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="glass rounded-xl p-6 space-y-5 min-h-[320px]">
+      <div className="glass rounded-3xl p-6 md:p-7 space-y-5 min-h-[320px] border border-border/50 shadow-arena">
         {step === 0 && (
           <>
-            <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">1. Game</h2>
+            <h2 className="section-label text-primary">1 · Game</h2>
             <p className="text-xs text-muted-foreground">
               Pick platform, then category, then title. Defaults for format and roster load from the catalog; you can still change them
               later.
@@ -729,7 +773,7 @@ export default function TournamentCreate() {
 
         {step === 1 && (
           <>
-            <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">2. Format</h2>
+            <h2 className="section-label text-primary">2 · Format</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Bracket format *</Label>
@@ -774,7 +818,7 @@ export default function TournamentCreate() {
 
         {step === 2 && (
           <>
-            <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">3. Scheduling</h2>
+            <h2 className="section-label text-primary">3 · Scheduling</h2>
             <div>
               <Label>Registration closes *</Label>
               <Input
@@ -816,7 +860,7 @@ export default function TournamentCreate() {
 
         {step === 3 && (
           <>
-            <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">4. Prize & fees</h2>
+            <h2 className="section-label text-primary">4 · Prize & fees</h2>
             <p className="text-xs text-muted-foreground">
               Entry fees are collected via your tenant checkout flows; prizes credit player wallets on finalize per your prize structure.
             </p>
@@ -1024,12 +1068,71 @@ export default function TournamentCreate() {
                 className="mt-1 bg-secondary/50"
               />
             </div>
+            <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4 space-y-4">
+              <p className="section-label text-primary">Eligibility &amp; integrity</p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>Allowed regions (comma-separated)</Label>
+                  <Input
+                    value={form.allowed_regions_csv}
+                    onChange={(e) => update("allowed_regions_csv", e.target.value)}
+                    placeholder="empty = all · e.g. us, eu, asia"
+                    className="mt-1 bg-background/40"
+                  />
+                </div>
+                <div>
+                  <Label>Min team Elo</Label>
+                  <Input
+                    type="number"
+                    value={form.min_team_elo}
+                    onChange={(e) => update("min_team_elo", e.target.value)}
+                    placeholder="e.g. 1200"
+                    className="mt-1 bg-background/40"
+                  />
+                </div>
+                <div>
+                  <Label>Elo tier (prestige weight)</Label>
+                  <Select value={form.elo_tier || "none"} onValueChange={(v) => update("elo_tier", v)}>
+                    <SelectTrigger className="mt-1 bg-background/40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Default (prize pool)</SelectItem>
+                      <SelectItem value="community">Community</SelectItem>
+                      <SelectItem value="regional">Regional</SelectItem>
+                      <SelectItem value="premier">Premier</SelectItem>
+                      <SelectItem value="major">Major</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!form.require_game_handle}
+                      onChange={(e) => update("require_game_handle", e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    Require linked game ID
+                  </label>
+                </div>
+              </div>
+              <div>
+                <Label>Eligibility notes (player-facing)</Label>
+                <Input
+                  value={form.eligibility_notes}
+                  onChange={(e) => update("eligibility_notes", e.target.value)}
+                  placeholder="e.g. NA only · verified Riot IDs · no smurfs"
+                  className="mt-1 bg-background/40"
+                />
+              </div>
+            </div>
           </>
         )}
 
         {step === 4 && (
           <>
-            <h2 className="font-display text-sm font-semibold tracking-wider uppercase text-muted-foreground">5. Branding & publish</h2>
+            <h2 className="section-label text-primary">5 · Branding & publish</h2>
             <div>
               <Label>Tournament name *</Label>
               <Input
@@ -1094,7 +1197,7 @@ export default function TournamentCreate() {
         )}
       </div>
 
-      <div className="flex justify-between gap-3 mt-6">
+      <div className="flex justify-between gap-3 mt-6 flex-wrap">
         <Button type="button" variant="ghost" onClick={() => (step > 0 ? setStep((s) => s - 1) : navigate("/league/tournaments"))}>
           {step === 0 ? "Cancel" : (
             <>
@@ -1105,6 +1208,7 @@ export default function TournamentCreate() {
         {step < STEPS.length - 1 ? (
           <Button
             type="button"
+            variant="arena"
             disabled={!canNext() || createDraftRow.isPending || createCustomGame.isPending}
             onClick={() => void goNext()}
           >
@@ -1117,15 +1221,14 @@ export default function TournamentCreate() {
               variant="outline"
               disabled={!canNext() || finishMutation.isPending}
               onClick={() => submit("draft")}
-              className="font-display text-xs tracking-wider"
             >
               {finishMutation.isPending ? "Saving…" : "Save as draft"}
             </Button>
             <Button
               type="button"
+              variant="arena"
               disabled={!canNext() || finishMutation.isPending}
               onClick={() => submit("registration_open")}
-              className="font-display text-xs tracking-wider"
             >
               {finishMutation.isPending ? "Publishing…" : "Publish (open registration)"}
             </Button>

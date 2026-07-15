@@ -2,6 +2,7 @@
  * Atomic tournament join — FOR UPDATE, team count, optional payment_ledger proof, idempotency, post-commit FCM + in-app notification.
  */
 import express from 'express';
+import { evaluateJoinEligibility, normalizeRegion } from '../lib/joinEligibility.js';
 import { pool } from '../db.js';
 import { runWithRls } from '../rls/transaction.js';
 import { clientSafeErrorMessage } from '../clientSafeError.js';
@@ -105,18 +106,7 @@ function normalizeAndValidateRoster({
   return { rosterJson: normalized };
 }
 
-async function verifyEntryFeePaid(client, { tournamentId, tenantId, fee, userEmail, proof }) {
-  const ref = String(proof?.reference || '').trim();
-  if (!ref) {
-    throw new JoinHttpError(402, {
-      error: 'Entry fee requires a completed payment — pass payment_proof.reference from your checkout provider',
-      code: 'payment_required',
-      amount: fee,
-    });
-  }
-  const provider = String(proof?.provider || 'stripe').toLowerCase();
-  const emailLower = String(userEmail || '').toLowerCase();
-
+async function lookupEntryFeeLedger(client, { tournamentId, tenantId, fee, emailLower, ref }) {
   const { rows } = await client.query(
     `SELECT id, amount, currency, provider, reference, description, created_by
      FROM payment_ledger
@@ -133,8 +123,48 @@ async function verifyEntryFeePaid(client, { tournamentId, tenantId, fee, userEma
      LIMIT 1`,
     [tournamentId, tenantId, ref, fee, emailLower]
   );
+  return rows[0] || null;
+}
 
-  const row = rows[0];
+async function verifyEntryFeePaid(client, { tournamentId, tenantId, fee, userEmail, proof }) {
+  const ref = String(proof?.reference || '').trim();
+  if (!ref) {
+    throw new JoinHttpError(402, {
+      error: 'Entry fee requires a completed payment — pass payment_proof.reference from your checkout provider',
+      code: 'payment_required',
+      amount: fee,
+    });
+  }
+  const provider = String(proof?.provider || 'stripe').toLowerCase();
+  const emailLower = String(userEmail || '').toLowerCase();
+
+  let row = await lookupEntryFeeLedger(client, { tournamentId, tenantId, fee, emailLower, ref });
+
+  // Webhook lag: if ledger missing, verify live with the provider in this same transaction.
+  if (!row && ['stripe', 'paystack', 'flutterwave'].includes(provider)) {
+    try {
+      const { verifyEntryFeeAndRecordLedger, EntryFeeVerifyError } = await import(
+        '../payments/verifyEntryFeeReference.js'
+      );
+      await verifyEntryFeeAndRecordLedger(client, {
+        tournamentId,
+        provider,
+        reference: ref,
+        captainEmail: emailLower,
+      });
+      row = await lookupEntryFeeLedger(client, { tournamentId, tenantId, fee, emailLower, ref });
+    } catch (e) {
+      if (e?.name === 'EntryFeeVerifyError' || e?.code) {
+        throw new JoinHttpError(e.status || 402, {
+          error: e.message || 'Payment could not be verified with provider',
+          code: e.code || 'payment_not_verified',
+          amount: fee,
+        });
+      }
+      // Fall through to ledger-missing error
+    }
+  }
+
   if (!row) {
     throw new JoinHttpError(402, {
       error: 'No matching completed entry_fee ledger row for this reference and account',
@@ -148,6 +178,14 @@ async function verifyEntryFeePaid(client, { tournamentId, tenantId, fee, userEma
       code: 'payment_provider_mismatch',
     });
   }
+  const desc = String(row.description || '');
+  if (/joined_team:/.test(desc)) {
+    throw new JoinHttpError(409, {
+      error: 'This payment reference was already used to join a tournament',
+      code: 'payment_already_used',
+    });
+  }
+  return row;
 }
 
 async function debitInternalWalletForEntry(client, { userSub, userEmail, captainEmail, tournament, fee, idempotencyKey }) {
@@ -293,6 +331,36 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res) => {
         }
       }
 
+      // Competitive eligibility: region, min Elo, game handle flags
+      const uElig = await client.query(
+        `SELECT profile_region, game_handles, role FROM users WHERE id::text = $1::text`,
+        [userSub]
+      );
+      const userRow = uElig.rows[0] || {};
+      const titleKeyEarly = String(t.game_title || '').trim();
+      let hasHandle = false;
+      if (titleKeyEarly && userRow.game_handles) {
+        const gh = typeof userRow.game_handles === 'object' ? userRow.game_handles : {};
+        hasHandle = Boolean(gh[titleKeyEarly] || Object.keys(gh).find((k) => k.toLowerCase() === titleKeyEarly.toLowerCase() && gh[k]));
+      }
+      const teamEloHint =
+        body.team_elo != null && Number.isFinite(Number(body.team_elo))
+          ? Number(body.team_elo)
+          : 1200;
+      // Mobile/web may pass captain_game_id without profile game_handles yet
+      if (!hasHandle && body.captain_game_id != null && String(body.captain_game_id).trim()) {
+        hasHandle = true;
+      }
+      const elig = evaluateJoinEligibility(t, {
+        userRegion: normalizeRegion(body.region || userRow.profile_region || 'global'),
+        teamElo: teamEloHint,
+        hasGameHandle: hasHandle,
+        userSuspended: false,
+      });
+      if (!elig.ok) {
+        throw new JoinHttpError(403, { error: elig.error, code: elig.code });
+      }
+
       const { rows: cntRows } = await client.query(
         `SELECT COUNT(*)::int AS c FROM teams WHERE tournament_id::text = $1`,
         [String(t.id)]
@@ -374,6 +442,19 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res) => {
         }
       }
 
+      // One captain seat per tournament (prevents double-join with replayed payment proofs).
+      const existingCap = await client.query(
+        `SELECT id FROM teams WHERE tournament_id::text = $1 AND lower(trim(captain_email)) = $2 LIMIT 1`,
+        [String(t.id), capEmail]
+      );
+      if (existingCap.rowCount) {
+        throw new JoinHttpError(409, {
+          error: 'You are already registered for this tournament',
+          code: 'already_registered',
+          team_id: existingCap.rows[0].id,
+        });
+      }
+
       const tagNorm = normTag(tag);
       const ins = await client.query(
         `INSERT INTO teams (tenant_id, tournament_id, name, tag, captain_email, roster, status)
@@ -381,6 +462,19 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res) => {
          RETURNING *`,
         [t.tenant_id, String(t.id), String(team_name).trim(), tagNorm, capEmail, JSON.stringify(rosterJson)]
       );
+
+      if (needsPay && payment_proof && String(payment_proof.method || '').toLowerCase() !== 'wallet') {
+        const pref = String(payment_proof.reference || '').trim();
+        if (pref) {
+          await client.query(
+            `UPDATE payment_ledger
+             SET description = COALESCE(description, '') || ' joined_team:' || $2::text,
+                 updated_date = NOW()
+             WHERE tournament_id::text = $1 AND type = 'entry_fee' AND reference = $3 AND status = 'completed'`,
+            [String(t.id), String(ins.rows[0].id), pref]
+          );
+        }
+      }
 
       await client.query(
         `UPDATE tournaments
@@ -458,11 +552,17 @@ router.post('/tournaments/:id/join', requireAuth, async (req, res) => {
       console.error('[join] notification insert', e.message);
     }
 
-    console.info('[join confirmation email stub]', {
-      to: capEmail,
-      tournament: tournament.name,
-      tournament_id: String(tournament.id),
-    });
+    try {
+      const { sendPlatformEmail } = await import('../mail/sendPlatformEmail.js');
+      await sendPlatformEmail({
+        to: capEmail,
+        subject: `Registered: ${tournament.name}`,
+        text: `You joined as ${team.name} [${team.tag}]. Open the lobby when the bracket is ready: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/tournaments/${tournament.id}/lobby`,
+        html: `<p>You joined <strong>${tournament.name}</strong> as <strong>${team.name}</strong> [${team.tag}].</p><p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/tournaments/${tournament.id}/lobby">Open tournament lobby</a></p>`,
+      });
+    } catch (e) {
+      console.warn('[join] confirmation email', e?.message || e);
+    }
 
     res.status(201).json({ team, tournament });
   } catch (e) {

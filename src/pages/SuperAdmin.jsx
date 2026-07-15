@@ -241,31 +241,31 @@ export default function SuperAdmin() {
   if (!isSuperAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+        <div className="w-16 h-16 rounded-2xl bg-destructive/10 ring-1 ring-destructive/25 flex items-center justify-center">
           <Shield className="w-8 h-8 text-destructive" />
         </div>
-        <h2 className="text-xl font-display font-bold text-foreground">Access Denied</h2>
-        <p className="text-muted-foreground text-sm">League command post is restricted to tenant Super Admins.</p>
+        <h2 className="text-xl font-display font-bold text-foreground">Access denied</h2>
+        <p className="text-muted-foreground text-sm max-w-sm text-center">
+          League command post is restricted to tenant Super Admins.
+        </p>
       </div>
     );
   }
 
-  if (loadingTenants) return <LoadingSpinner />;
+  if (loadingTenants) return <LoadingSpinner label="Loading command post…" />;
 
   const activeInScope = scopeId ? tenants.filter((t) => t.id === scopeId && t.status === "active").length : tenants.filter((t) => t.status === "active").length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20">
       <PageHeader
+        eyebrow="League ops · Super admin"
         title={
-          <span className="flex flex-wrap items-center gap-3">
-            <span className="px-2 py-0.5 rounded text-[10px] font-display font-bold tracking-widest bg-accent/20 text-accent border border-accent/30">
-              TENANT SUPER ADMIN
-            </span>
-            <span>League command post</span>
-          </span>
+          <>
+            League <span className="text-gradient-primary">command post</span>
+          </>
         }
-        subtitle={`Same layout as Central Station — scoped to ${scopeName}. Platform-wide bans, commission %, API vault, and Stripe escrow live in Central Station only.`}
+        subtitle={`Scoped to ${scopeName}. Platform-wide bans, commission %, API vault, and Stripe escrow live in Central Station only.`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => logout()} className="gap-2">
@@ -273,7 +273,7 @@ export default function SuperAdmin() {
             </Button>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2 font-display text-xs tracking-wider">
+                <Button variant="arena" className="gap-2">
                   <Plus className="w-4 h-4" /> New organization
                 </Button>
               </DialogTrigger>
@@ -344,62 +344,70 @@ export default function SuperAdmin() {
         }
       />
 
-      <div className="glass rounded-xl p-4 border border-border/60 text-xs text-muted-foreground space-y-1">
-        <p className="font-semibold text-foreground flex items-center gap-2">
-          <Shield className="w-3.5 h-3.5 text-primary" /> Naming
+      <div className="glass rounded-2xl p-4 md:p-5 border border-primary/20 text-xs text-muted-foreground space-y-2 shadow-arena-card">
+        <p className="font-display text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+          <Shield className="w-3.5 h-3.5 text-primary" /> Naming &amp; scope
         </p>
-        <p>
-          <span className="text-foreground font-medium">Central Station</span> (platform <code className="text-[10px]">admin</code>) is
-          the multi-tenant god view. This page is the <span className="text-foreground font-medium">League command post</span> (
-          <code className="text-[10px]">super_admin</code>) for brackets, payouts, and branding inside one ecosystem.
+        <p className="leading-relaxed">
+          <span className="text-foreground font-medium">Central Station</span> (platform{" "}
+          <code className="text-[10px] px-1 py-0.5 rounded bg-secondary">admin</code>) is the multi-tenant god view. This
+          page is the <span className="text-foreground font-medium">League command post</span> (
+          <code className="text-[10px] px-1 py-0.5 rounded bg-secondary">super_admin</code>) for brackets, payouts, and
+          branding inside one ecosystem.
         </p>
       </div>
 
       <Tabs defaultValue="pulse" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1 justify-start">
-          <TabsTrigger value="pulse" className="gap-1.5">
+        <TabsList className="flex flex-wrap h-auto gap-1 justify-start p-1.5 glass rounded-2xl border border-border/50 bg-card/40">
+          <TabsTrigger value="pulse" className="gap-1.5 rounded-xl data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Activity className="w-3.5 h-3.5" /> Pulse
           </TabsTrigger>
-          <TabsTrigger value="organizations" className="gap-1.5">
+          <TabsTrigger value="organizations" className="gap-1.5 rounded-xl data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Building2 className="w-3.5 h-3.5" /> Organizations
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-1.5">
+          <TabsTrigger value="security" className="gap-1.5 rounded-xl data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Lock className="w-3.5 h-3.5" /> Security
           </TabsTrigger>
-          <TabsTrigger value="infrastructure" className="gap-1.5">
+          <TabsTrigger value="infrastructure" className="gap-1.5 rounded-xl data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Server className="w-3.5 h-3.5" /> Infrastructure
           </TabsTrigger>
-          <TabsTrigger value="financial" className="gap-1.5">
+          <TabsTrigger value="financial" className="gap-1.5 rounded-xl data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
             <Landmark className="w-3.5 h-3.5" /> Financial
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pulse" className="space-y-4">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="glass rounded-lg p-4">
-              <p className="text-2xl font-display font-bold text-primary">{activeInScope}</p>
-              <p className="text-xs text-muted-foreground mt-1">Active orgs (visible scope)</p>
+            <div className="glass rounded-2xl p-5 border border-border/50 shadow-arena-card">
+              <p className="section-label mb-2">Active orgs</p>
+              <p className="text-3xl font-display font-bold text-primary tabular-nums">{activeInScope}</p>
+              <p className="text-xs text-muted-foreground mt-1">Visible scope</p>
             </div>
-            <div className="glass rounded-lg p-4">
-              <p className="text-2xl font-display font-bold text-accent">{playersInLive}</p>
-              <p className="text-xs text-muted-foreground mt-1">Players in live brackets (roster count)</p>
+            <div className="glass rounded-2xl p-5 border border-border/50 shadow-arena-card">
+              <p className="section-label mb-2">Live players</p>
+              <p className="text-3xl font-display font-bold text-accent tabular-nums">{playersInLive}</p>
+              <p className="text-xs text-muted-foreground mt-1">Roster count in live brackets</p>
             </div>
-            <div className="glass rounded-lg p-4">
-              <p className="text-2xl font-display font-bold text-primary">
+            <div className="glass rounded-2xl p-5 border border-border/50 shadow-arena-card">
+              <p className="section-label mb-2">Prize pool</p>
+              <p className="text-3xl font-display font-bold text-primary tabular-nums">
                 ${scopedTournaments.reduce((s, t) => s + (Number(t.prize_pool) || 0), 0).toLocaleString()}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Prize pool (scoped tournaments)</p>
+              <p className="text-xs text-muted-foreground mt-1">Scoped tournaments</p>
             </div>
-            <div className="glass rounded-lg p-4">
-              <p className="text-2xl font-display font-bold text-foreground">{liveMatches.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">Open / in-progress matches</p>
+            <div className="glass rounded-2xl p-5 border border-border/50 shadow-arena-card">
+              <p className="section-label mb-2">Open matches</p>
+              <p className="text-3xl font-display font-bold text-foreground tabular-nums">{liveMatches.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">In progress / check-in</p>
             </div>
           </div>
-          <div className="glass rounded-xl p-5 flex items-start gap-3">
-            <Cpu className="w-5 h-5 text-primary mt-0.5" />
+          <div className="glass rounded-2xl p-5 flex items-start gap-3 border border-border/50">
+            <div className="p-2 rounded-xl bg-primary/15 ring-1 ring-primary/25">
+              <Cpu className="w-5 h-5 text-primary" />
+            </div>
             <div className="text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">League health</p>
-              <p className="text-xs mt-1">
+              <p className="font-semibold text-foreground font-display text-xs uppercase tracking-wider">League health</p>
+              <p className="text-xs mt-1.5 leading-relaxed">
                 Tournaments in scope: {scopedTournaments.length} · Teams in scope: {scopedTeams.length}. Platform API latency lives in
                 Central Station Pulse.
               </p>

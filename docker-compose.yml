@@ -1,6 +1,5 @@
 # Local infrastructure for Arena-SaaS development.
-# Local DB/Redis for Arena-SaaS; use these services when building workers,
-# applying src/db/schema.sql, or running Redis-backed jobs locally.
+# Local DB/Redis for Arena-SaaS; forfeit + prize workers start with the stack by default.
 
 services:
   postgres:
@@ -8,8 +7,8 @@ services:
     container_name: arena-postgres
     restart: unless-stopped
     ports:
-      # Host 5433 avoids clashing with a local PostgreSQL on 5432
-      - "5433:5432"
+      # Host 5435: 5432/5433/5434 often used by other local stacks on this machine
+      - "5435:5432"
     environment:
       POSTGRES_USER: arena
       POSTGRES_PASSWORD: arena_dev
@@ -27,7 +26,8 @@ services:
     container_name: arena-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # Host 6381: 6379 often used by other Redis instances
+      - "6381:6379"
     command: redis-server --appendonly yes
     volumes:
       - arena_redis_data:/data
@@ -37,11 +37,11 @@ services:
       timeout: 3s
       retries: 5
 
-  # Optional: docker compose --profile workers up -d
-  # Runs forfeit poller against DB + Redis on the compose network (align DATABASE_* with server/.env after migrate).
+  # Always-on forfeit poller (check-in SLA). Skip with: docker compose up -d postgres redis
   forfeit-worker:
-    profiles: ["workers"]
     image: node:22-bookworm-slim
+    container_name: arena-forfeit-worker
+    restart: unless-stopped
     working_dir: /workspace/server
     volumes:
       - ./:/workspace
@@ -49,12 +49,33 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://arena:arena_dev@postgres:5432/arena_dev
       DATABASE_RUNTIME_URL: postgresql://arena_app:arena_app_dev@postgres:5432/arena_dev
+      FORFEIT_WORKER_POLL_MS: "15000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "cd /workspace/server && npm ci && npm run worker:forfeit"
+    command: sh -c "cd /workspace/server && npm ci --omit=dev 2>/dev/null || npm install --omit=dev; npm run worker:forfeit"
+
+  # Dedicated BullMQ prize worker (set PRIZE_PAYOUT_WORKER=0 on API if you use this exclusively).
+  prize-payout-worker:
+    image: node:22-bookworm-slim
+    container_name: arena-prize-worker
+    restart: unless-stopped
+    working_dir: /workspace/server
+    volumes:
+      - ./:/workspace
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://arena:arena_dev@postgres:5432/arena_dev
+      DATABASE_RUNTIME_URL: postgresql://arena_app:arena_app_dev@postgres:5432/arena_dev
+      PRIZE_PAYOUT_WORKER: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sh -c "cd /workspace/server && npm ci --omit=dev 2>/dev/null || npm install --omit=dev; node -e \"import('./src/jobs/prizePayoutBullmq.js').then(m => m.startPrizePayoutBullWorker())\""
 
 volumes:
   arena_pg_data:

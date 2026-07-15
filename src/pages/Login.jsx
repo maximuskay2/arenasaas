@@ -14,7 +14,8 @@ import { getClientHwid } from '@/lib/clientHwid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, Mail, Loader2, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Loader2, ArrowLeft, ShieldCheck, Zap } from 'lucide-react';
+import ThemeToggle from '@/components/theme/ThemeToggle';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -24,7 +25,7 @@ export default function Login() {
   const [mfaToken, setMfaToken] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [params] = useSearchParams();
-  
+
   const returnUrl = params.get('returnUrl') || '/';
   const registerHref = isOrganizerPortalEntry()
     ? `${getMarketingSiteOrigin()}/register`
@@ -36,7 +37,6 @@ export default function Login() {
     return `${registerHref}${sep}returnUrl=${enc}`;
   }, [registerHref, returnUrl]);
 
-  // Logic remains strictly identical to your provided code
   const redirectAfterLogin = (data) => {
     if (data?.user?.role === 'admin') {
       clearOrganizerPortalSession();
@@ -116,95 +116,99 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505] selection:bg-primary/30 px-6 relative overflow-hidden">
-      {/* Cinematic Background Elements */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-hero selection:bg-primary/30 px-6 relative overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 blur-[140px] rounded-full opacity-40" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/10 blur-[120px] rounded-full opacity-30" />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+        <div className="absolute top-[-15%] left-[-10%] w-[55%] h-[55%] bg-primary/15 blur-[140px] rounded-full" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] bg-accent/12 blur-[120px] rounded-full" />
+        <div
+          className="absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage:
+              'linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent)',
+          }}
+        />
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[440px] relative z-10"
       >
-        {/* Back to Site Link */}
-        <Link 
-          to="/" 
-          className="inline-flex items-center gap-2 text-xs font-black uppercase italic tracking-widest text-slate-500 hover:text-primary transition-colors mb-8 group"
-        >
-          <ArrowLeft className="h-3 w-3 group-hover:-translate-x-1 transition-transform" />
-          Back to Terminal
-        </Link>
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors group"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-1 transition-transform" />
+            Back to Arena
+          </Link>
+          <ThemeToggle variant="menu" />
+        </div>
 
-        <div className="rounded-[2.5rem] border border-white/5 bg-white/[0.02] backdrop-blur-2xl p-10 shadow-2xl shadow-black">
-          <header className="text-center mb-10">
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/20 mb-6 transform -rotate-3 hover:rotate-0 transition-transform duration-500">
-              <span className="text-2xl">🎮</span>
+        <div className="rounded-3xl border border-border/60 glass p-8 md:p-10 shadow-arena">
+          <header className="text-center mb-9">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/40 to-accent/30 ring-1 ring-primary/40 shadow-arena-glow mb-5">
+              <Zap className="h-7 w-7 text-primary" />
             </div>
-            <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-              Games <span className="text-primary">Portal</span>
+            <h1 className="text-3xl font-display font-bold tracking-tight text-foreground">
+              Sign <span className="text-gradient-primary">in</span>
             </h1>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em] mt-2">
-              Secure Authentication Required
+            <p className="text-muted-foreground text-xs font-semibold uppercase tracking-[0.18em] mt-2">
+              Secure access · Organizers & players
             </p>
           </header>
 
-          <form onSubmit={mfaToken ? handleMfaSubmit : handleSubmit} className="space-y-6">
+          <form onSubmit={mfaToken ? handleMfaSubmit : handleSubmit} className="space-y-5">
             {mfaToken && (
-              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-center text-xs text-slate-300">
+              <div className="p-3 rounded-xl bg-primary/10 border border-primary/25 text-center text-xs text-foreground/90">
                 Enter the 6-digit code from your authenticator app.
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">
-                Registry Email
+              <Label htmlFor="email" className="section-label ml-0.5">
+                Email
               </Label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600 group-focus-within:text-primary transition-colors" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@yourleague.com"
+                  placeholder="you@arena.local"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={!!mfaToken}
-                  className="bg-white/5 border-white/10 h-14 pl-12 rounded-xl focus:ring-primary focus:border-primary/50 transition-all placeholder:text-slate-700 disabled:opacity-50"
+                  className="bg-background/40 border-border/70 h-12 pl-12 rounded-xl focus-visible:ring-primary"
                 />
               </div>
             </div>
 
             {!mfaToken && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between ml-1">
-                <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Access Key
+              <div className="space-y-2">
+                <Label htmlFor="password" className="section-label ml-0.5">
+                  Password
                 </Label>
-                <a href="#" className="text-[10px] font-black uppercase tracking-widest text-primary/60 hover:text-primary">
-                  Forgot?
-                </a>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="bg-background/40 border-border/70 h-12 pl-12 rounded-xl focus-visible:ring-primary"
+                  />
+                </div>
               </div>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600 group-focus-within:text-primary transition-colors" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="bg-white/5 border-white/10 h-14 pl-12 rounded-xl focus:ring-primary focus:border-primary/50 transition-all placeholder:text-slate-700"
-                />
-              </div>
-            </div>
             )}
 
             {mfaToken && (
               <div className="space-y-2">
-                <Label htmlFor="mfa" className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">
+                <Label htmlFor="mfa" className="section-label ml-0.5">
                   Authenticator code
                 </Label>
                 <Input
@@ -215,33 +219,29 @@ export default function Login() {
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
                   required
-                  className="bg-white/5 border-white/10 h-14 rounded-xl text-center text-lg tracking-[0.3em] font-mono"
+                  className="bg-background/40 border-border/70 h-12 rounded-xl text-center text-lg tracking-[0.35em] font-mono"
                 />
               </div>
             )}
 
             <AnimatePresence>
               {error && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] font-bold text-center italic"
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="p-3 rounded-xl bg-destructive/10 border border-destructive/25 text-destructive text-xs font-semibold text-center"
                 >
                   {error}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <Button 
-              type="submit" 
-              className="w-full h-14 bg-primary hover:bg-primary/90 text-white font-black uppercase italic tracking-tighter rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" 
-              disabled={loading}
-            >
+            <Button type="submit" className="w-full h-12" size="lg" variant="arena" disabled={loading}>
               {loading ? (
-                <div className="flex items-center gap-2">
+                <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Authenticating...
-                </div>
+                  Authenticating…
+                </span>
               ) : mfaToken ? (
                 'Verify MFA'
               ) : (
@@ -250,26 +250,17 @@ export default function Login() {
             </Button>
           </form>
 
-          <footer className="mt-10 pt-8 border-t border-white/5">
-            <div className="flex flex-col items-center gap-4">
-              <p className="text-[11px] font-medium text-slate-500">
-                Don't have an organization yet?
-              </p>
-              <Button variant="outline" asChild className="w-full h-12 border-white/10 bg-white/5 rounded-xl text-xs font-black uppercase italic tracking-widest hover:bg-white/10">
-                <a href={registerHrefWithReturn}>
-                  Register Now
-                </a>
-              </Button>
-            </div>
+          <footer className="mt-8 pt-6 border-t border-border/50">
+            <p className="text-center text-xs text-muted-foreground mb-3">New to Arena?</p>
+            <Button variant="outline" asChild className="w-full h-11">
+              <a href={registerHrefWithReturn}>Create account</a>
+            </Button>
           </footer>
         </div>
 
-        {/* Security Footer */}
-        <div className="mt-8 flex items-center justify-center gap-2 opacity-30 group hover:opacity-100 transition-opacity">
-          <ShieldCheck className="h-4 w-4 text-primary" />
-          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
-            Encrypted End-to-End // 2026 Platform
-          </span>
+        <div className="mt-8 flex items-center justify-center gap-2 text-muted-foreground/50">
+          <ShieldCheck className="h-4 w-4 text-primary/70" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Encrypted session · Arena Grid</span>
         </div>
       </motion.div>
     </div>

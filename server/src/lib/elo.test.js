@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeMatchElo, expectedScore, kFactorFromPrizePool, ELO_DEFAULT } from './elo.js';
+import {
+  computeMatchElo,
+  expectedScore,
+  kFactorFromPrizePool,
+  kFactorFromEloTier,
+  kFactorFromTournament,
+  ELO_DEFAULT,
+} from './elo.js';
 
 test('expectedScore equal ratings', () => {
   assert.ok(Math.abs(expectedScore(1200, 1200) - 0.5) < 1e-9);
@@ -31,4 +38,16 @@ test('computeMatchElo upset swings more', () => {
 
 test('baseline default', () => {
   assert.equal(ELO_DEFAULT, 1200);
+});
+
+test('kFactorFromEloTier', () => {
+  assert.equal(kFactorFromEloTier('major'), 40);
+  assert.equal(kFactorFromEloTier('premier'), 32);
+  assert.equal(kFactorFromEloTier(null), null);
+});
+
+test('kFactorFromTournament max(pool, tier)', () => {
+  assert.equal(kFactorFromTournament({ prize_pool: 0, elo_tier: 'major' }), 40);
+  assert.equal(kFactorFromTournament({ prize_pool: 12000, elo_tier: 'community' }), 40);
+  assert.equal(kFactorFromTournament({ prize_pool: 100 }), 24);
 });

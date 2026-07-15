@@ -1,17 +1,42 @@
 {
-  "name": "ArenaSaaS",
-  "short_name": "ArenaSaaS",
-  "description": "Multi-tenant esports tournament platform for organizers, teams, and fans.",
+  "name": "Arena Grid",
+  "short_name": "Arena",
+  "description": "Multi-tenant esports OS — tournaments, live matches, check-in, and player career hub.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0a0e1a",
+  "orientation": "any",
+  "background_color": "#070a12",
   "theme_color": "#00e5ff",
+  "categories": ["games", "sports", "social"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any"
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Discover",
+      "url": "/tournaments",
+      "description": "Browse open competitions"
+    },
+    {
+      "name": "Watch live",
+      "url": "/watch",
+      "description": "Live match hub"
+    },
+    {
+      "name": "Check-in",
+      "url": "/check-in",
+      "description": "Match ready check-in"
+    },
+    {
+      "name": "My matches",
+      "url": "/dashboard/matches",
+      "description": "Your fixtures"
     }
   ]
 }

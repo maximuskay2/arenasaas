@@ -30,6 +30,27 @@ CREATE TABLE IF NOT EXISTS tenants (
 );
 
 -- ============================================================
+-- USERS (must exist before FKs: user_wallets, ledger, feed, …)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email TEXT NOT NULL UNIQUE,
+  full_name TEXT,
+  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin', 'moderator', 'super_admin')),
+  game_handles JSONB DEFAULT '{}',  -- {Valorant: "handle", ...}
+  stripe_customer_id TEXT,
+  kyc_cleared BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Denormalized mirror of placement/participation accolades (filled by trigger on user_accolades).
+  achievements JSONB NOT NULL DEFAULT '[]'::jsonb,
+  profile_xp INTEGER NOT NULL DEFAULT 0,
+  profile_region TEXT DEFAULT 'global',
+  mfa_secret TEXT,
+  mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- TENANT CONFIG (white-label branding per tenant)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tenant_configs (
@@ -369,9 +390,38 @@ CREATE TABLE IF NOT EXISTS tournaments (
   seeding_method TEXT DEFAULT 'random' CHECK (seeding_method IN ('manual', 'by_rank', 'random')),
   rules TEXT,
   stream_url TEXT,
+  -- Competitive eligibility (join-time gates)
+  allowed_regions JSONB DEFAULT '[]'::jsonb,
+  min_team_elo NUMERIC(8, 2),
+  require_game_handle BOOLEAN NOT NULL DEFAULT FALSE,
+  eligibility_notes TEXT,
+  elo_tier TEXT CHECK (elo_tier IS NULL OR elo_tier IN ('community', 'regional', 'premier', 'major')),
+  watchlist_count INTEGER NOT NULL DEFAULT 0,
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by TEXT
+);
+
+-- Player watchlist for discovery growth
+CREATE TABLE IF NOT EXISTS tournament_watchlist (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tournament_id UUID NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, tournament_id)
+);
+
+-- Multi-stream broadcast sources
+CREATE TABLE IF NOT EXISTS tournament_streams (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tournament_id TEXT NOT NULL,
+  match_id TEXT,
+  tenant_id TEXT,
+  label TEXT NOT NULL DEFAULT 'Main',
+  stream_url TEXT NOT NULL,
+  provider TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================
@@ -838,26 +888,6 @@ CREATE TABLE IF NOT EXISTS platform_config (
 );
 
 -- ============================================================
--- USERS (extended profile, mirrors maxikay user)
--- ============================================================
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT NOT NULL UNIQUE,
-  full_name TEXT,
-  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin', 'moderator', 'super_admin')),
-  game_handles JSONB DEFAULT '{}',  -- {Valorant: "handle", ...}
-  stripe_customer_id TEXT,
-  kyc_cleared BOOLEAN NOT NULL DEFAULT FALSE,
-  -- Denormalized mirror of placement/participation accolades (filled by trigger on user_accolades).
-  achievements JSONB NOT NULL DEFAULT '[]'::jsonb,
-  profile_xp INTEGER NOT NULL DEFAULT 0,
-  mfa_secret TEXT,
-  mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-  created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
 -- GLOBAL ELO / PRESTIGE (cross-tournament team entities)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS elo_entities (
@@ -868,12 +898,18 @@ CREATE TABLE IF NOT EXISTS elo_entities (
   elo NUMERIC(10, 2) NOT NULL DEFAULT 1200,
   wins INTEGER NOT NULL DEFAULT 0,
   losses INTEGER NOT NULL DEFAULT 0,
+  entity_kind TEXT NOT NULL DEFAULT 'team', -- team | player
   created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS team_elo_links (
   team_id TEXT PRIMARY KEY,
+  elo_entity_id UUID NOT NULL REFERENCES elo_entities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS player_elo_links (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   elo_entity_id UUID NOT NULL REFERENCES elo_entities(id) ON DELETE CASCADE
 );
 

@@ -1,21 +1,47 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="ArenaSaaS — run esports leagues with auto-brackets, live scoring, team management, and payouts. Multi-tenant platform for organizers."
+      content="Arena Grid — the multi-tenant esports operating system. Live brackets, prize payouts, white-label leagues, and a global player career hub."
     />
-    <meta property="og:title" content="ArenaSaaS" />
+    <meta property="og:title" content="Arena Grid — Esports OS" />
     <meta
       property="og:description"
-      content="Run your esports league in minutes. Auto-brackets, live scoring, white-label sites, and Stripe prize payouts."
+      content="Run world-class esports leagues. Auto-brackets, live scoring, wallets, and player hub."
     />
-    <meta name="theme-color" content="#0a0e1a" />
+    <meta name="theme-color" content="#070a12" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
-    <title>ArenaSaaS</title>
+    <title>Arena Grid</title>
+    <!-- Prevent flash of wrong theme before React hydrates -->
+    <script>
+      (function () {
+        try {
+          var key = "arena-theme";
+          var stored = localStorage.getItem(key);
+          if (!stored) {
+            var legacy = localStorage.getItem("theme");
+            if (legacy === "light" || legacy === "dark") {
+              stored = legacy;
+              localStorage.setItem(key, legacy);
+            }
+          }
+          var theme = stored || "dark";
+          if (theme === "system") {
+            theme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          if (theme !== "light" && theme !== "dark") theme = "dark";
+          var root = document.documentElement;
+          root.classList.remove("light", "dark");
+          root.classList.add(theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#f4f6fa" : "#070a12");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

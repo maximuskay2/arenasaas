@@ -165,4 +165,4 @@ Master **§13**.
 
 ---
 
-*End of co-developer guide.*
+*End of co-developer guide. admin@arena.local / admin123 organizer@arena.local / organizer123*

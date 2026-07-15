@@ -333,6 +333,15 @@ router.post('/matches/:matchId/report-result', requireAuth, async (req, res) => 
         headline: `${c.winner_name || 'Winner'} takes the map`,
         body: `Final score ${c.score_a}-${c.score_b}`,
         matchId: String(c.id),
+        actor_team_id: c.winner_id || null,
+        payload: { score_a: c.score_a, score_b: c.score_b, event: 'match_complete' },
+      });
+      emitMatchCenterFeed(String(c.id), {
+        type: 'narrative',
+        headline: 'Series closed',
+        body: `${c.team_a_name || 'A'} vs ${c.team_b_name || 'B'} — ${c.winner_name || 'Winner'} confirmed`,
+        matchId: String(c.id),
+        payload: { icon: 'trophy' },
       });
       if (result.advanced_to) {
         emitMatchCenterFeed(String(c.id), {
@@ -347,6 +356,22 @@ router.post('/matches/:matchId/report-result', requireAuth, async (req, res) => 
           body: `${nx.team_a_name || 'TBD'} vs ${nx.team_b_name || 'TBD'}`,
           matchId: String(nx.id),
         });
+      }
+      try {
+        const { notifyDiscordMatchResult } = await import('../integrations/discordWebhook.js');
+        void notifyDiscordMatchResult({
+          tournamentName: c.tournament_name,
+          teamA: c.team_a_name,
+          teamB: c.team_b_name,
+          scoreA: c.score_a,
+          scoreB: c.score_b,
+          winnerName: c.winner_name,
+          matchUrl: process.env.FRONTEND_URL
+            ? `${process.env.FRONTEND_URL}/matches/${c.id}/live`
+            : undefined,
+        });
+      } catch {
+        /* optional */
       }
     }
     res.json(result);

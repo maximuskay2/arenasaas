@@ -37,37 +37,39 @@ export default function Tournaments() {
   const statuses = ["all", "draft", "registration_open", "in_progress", "completed"];
 
   return (
-    <div className="space-y-6 pb-20 md:pb-0">
+    <div className="space-y-6 pb-20 md:pb-0 max-w-7xl mx-auto">
       <PageHeader
-        title="Tournaments"
-        subtitle={`${tournaments.length} tournaments total`}
+        eyebrow="League operations"
+        title={<>My <span className="text-gradient-primary">Tournaments</span></>}
+        subtitle={`${tournaments.length} events in your organization · create, publish, and run live`}
         actions={
-          <Button onClick={() => navigate("/tournaments/new")} className="gap-2 font-display text-xs tracking-wider">
-            <Plus className="w-4 h-4" /> CREATE
+          <Button onClick={() => navigate("/tournaments/new")} variant="arena" className="gap-2">
+            <Plus className="w-4 h-4" /> Create event
           </Button>
         }
       />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 glass rounded-2xl p-3 border border-border/50">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search tournaments..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-secondary/50 border-border/50"
+            className="pl-9 bg-background/40 border-border/50 rounded-xl"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {statuses.map((s) => (
             <button
               key={s}
+              type="button"
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 rounded-xl text-[11px] font-display font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${
                 statusFilter === s
-                  ? "bg-primary/15 text-primary border border-primary/30"
-                  : "bg-secondary/50 text-muted-foreground hover:text-foreground"
+                  ? "bg-primary/15 text-primary border border-primary/35"
+                  : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-transparent"
               }`}
             >
               {s === "all" ? "All" : s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}

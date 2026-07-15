@@ -1,23 +1,93 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Settings, Link2, Receipt, Bell } from "lucide-react";
+import { Settings, Link2, Receipt, Bell, Gamepad2, Sun, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { maxikay } from "@/api/maxikayClient";
 import { useAuth } from "@/lib/AuthContext";
+import ThemeToggle from "@/components/theme/ThemeToggle";
+
+const REGIONS = [
+  { value: "global", label: "Global" },
+  { value: "us", label: "US / NA" },
+  { value: "eu", label: "EU" },
+  { value: "asia", label: "Asia / OCE" },
+  { value: "africa", label: "Africa" },
+  { value: "latam", label: "LATAM" },
+  { value: "me", label: "Middle East" },
+];
 
 export default function PlayerHubSettings() {
   const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tournamentId, setTournamentId] = useState("");
   const [provider, setProvider] = useState("stripe");
   const [paymentRef, setPaymentRef] = useState("");
   const [captainEmail, setCaptainEmail] = useState("");
   const [fcmToken, setFcmToken] = useState("");
   const [fcmTournamentId, setFcmTournamentId] = useState("");
+  const [region, setRegion] = useState("global");
+
+  const { data: oauthStatus } = useQuery({
+    queryKey: ["oauth-status"],
+    queryFn: () => maxikay.oauth.status(),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const { data: me } = useQuery({
+    queryKey: ["auth-me-settings"],
+    queryFn: () => maxikay.auth.me(),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (me?.profile_region) setRegion(String(me.profile_region).toLowerCase());
+  }, [me?.profile_region]);
+
+  const saveRegion = useMutation({
+    mutationFn: () => maxikay.auth.updateMe({ profile_region: region }),
+    onSuccess: () => {
+      toast.success("Region saved — used for tournament eligibility");
+      queryClient.invalidateQueries({ queryKey: ["auth-me-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["me-hub"] });
+    },
+    onError: (err) => toast.error(err?.data?.error || err?.message || "Could not save region"),
+  });
+
+  useEffect(() => {
+    const linked = searchParams.get("linked");
+    const err = searchParams.get("link_error");
+    if (linked) {
+      toast.success(`Linked ${linked} account to your profile.`);
+      const next = new URLSearchParams(searchParams);
+      next.delete("linked");
+      setSearchParams(next, { replace: true });
+    }
+    if (err) {
+      toast.error(`Could not link account: ${err}`);
+      const next = new URLSearchParams(searchParams);
+      next.delete("link_error");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const startOAuth = useMutation({
+    mutationFn: (prov) => maxikay.oauth.start(prov, { returnTo: window.location.href }),
+    onSuccess: (data) => {
+      if (data?.url) window.location.assign(data.url);
+      else toast.error("No OAuth URL returned");
+    },
+    onError: (err) => {
+      toast.error(err.data?.error || err.message || "OAuth not configured");
+    },
+  });
 
   const verifyPayment = useMutation({
     mutationFn: () =>
@@ -61,6 +131,51 @@ export default function PlayerHubSettings() {
         </p>
       </div>
 
+      <div className="rounded-2xl border border-border/60 bg-card/40 p-6 space-y-4 glass">
+        <div className="flex items-center gap-2">
+          <Sun className="h-5 w-5 text-primary" />
+          <h2 className="font-display font-bold tracking-tight">Appearance</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Switch between light, dark, or system theme for the whole app.
+        </p>
+        <ThemeToggle variant="menu" showLabel className="border border-border/60 rounded-xl px-3" />
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-card/40 p-6 space-y-4 glass">
+        <div className="flex items-center gap-2">
+          <Globe className="h-5 w-5 text-primary" />
+          <h2 className="font-display font-bold tracking-tight">Competitive region</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Used when organizers restrict events by region (join eligibility).
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="flex-1 space-y-2">
+            <Label>Your region</Label>
+            <Select value={region} onValueChange={setRegion}>
+              <SelectTrigger className="bg-background/40 border-border/60 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REGIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            variant="arena"
+            disabled={!isAuthenticated || saveRegion.isPending}
+            onClick={() => saveRegion.mutate()}
+          >
+            {saveRegion.isPending ? "Saving…" : "Save region"}
+          </Button>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-border/60 bg-card/40 p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Settings className="h-5 w-5 text-primary" />
@@ -68,11 +183,44 @@ export default function PlayerHubSettings() {
         </div>
         <p className="text-sm text-muted-foreground">
           Update profile, security, and <strong className="text-foreground">game_handles</strong> (Riot, Steam, PSN,
-          etc.) in the main Settings area.
+          etc.) in the main Settings area — or link via OAuth below.
         </p>
         <Button className="font-black uppercase italic" asChild>
           <Link to="/settings">Open settings</Link>
         </Button>
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-card/40 p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Gamepad2 className="h-5 w-5 text-primary" />
+          <h2 className="font-black uppercase italic">Link game accounts (OAuth)</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Connect Discord, Steam, or Riot when API secrets are configured. Status:{" "}
+          <strong className="text-foreground">{oauthStatus?.enabled ? "OAuth available" : "not configured"}</strong>
+          .
+        </p>
+        {!isAuthenticated && <p className="text-xs text-amber-200/90">Sign in to link accounts.</p>}
+        <div className="flex flex-wrap gap-2">
+          {["discord", "steam", "riot"].map((p) => {
+            const cfg = oauthStatus?.providers?.find((x) => x.provider === p);
+            return (
+              <Button
+                key={p}
+                type="button"
+                variant="outline"
+                className="font-black uppercase italic"
+                disabled={!isAuthenticated || startOAuth.isPending || cfg?.configured === false}
+                onClick={() => startOAuth.mutate(p)}
+                title={cfg?.configured === false ? "Provider secrets not set on API" : `Link ${p}`}
+              >
+                <Link2 className="mr-2 h-4 w-4" />
+                {p}
+                {cfg?.configured === false ? " (off)" : ""}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/40 p-6 space-y-4">

@@ -77,11 +77,18 @@ export async function fulfillCheckoutMetadata(client, { meta, amountMajor, curre
     const amountMinor = Math.round(Number(amountMajor) * 100);
     const prov = String(provider).slice(0, 32);
     const desc = `Tournament registration (${prov})${payerEmail ? ` payer=${payerEmail}` : ''}`;
-    await client.query(
+    // Partial unique index on reference — concurrent webhook + verify must not double-credit.
+    const ins = await client.query(
       `INSERT INTO payment_ledger (tenant_id, tournament_id, type, amount, amount_minor, currency, provider, held, reference, description, status, created_by)
-       VALUES ($1, $2, 'entry_fee', $3, $4, $5, $6, FALSE, $7, $8, 'completed', NULLIF($9, ''))`,
+       VALUES ($1, $2, 'entry_fee', $3, $4, $5, $6, FALSE, $7, $8, 'completed', NULLIF($9, ''))
+       ON CONFLICT (reference) WHERE (reference IS NOT NULL AND btrim(reference) <> '')
+       DO NOTHING
+       RETURNING id`,
       [tenantId, tournamentId, amountMajor, amountMinor, cur, prov, String(ledgerReference), desc, payerEmail || null]
     );
+    if (!ins.rowCount) {
+      return { kind: 'registration', duplicate: true };
+    }
     await creditTenantWalletEntryFeeNet(client, {
       tenantId,
       tournamentId,

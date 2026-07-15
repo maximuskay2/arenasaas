@@ -6,7 +6,12 @@ import { useAuth } from "@/lib/AuthContext";
 import { UserPlus, X, Check, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PaymentsAdapter } from "@/lib/payments";
+import {
+  PaymentsAdapter,
+  readStoredCheckoutRef,
+  clearStoredCheckoutRef,
+  inferPaymentProviderFromRef,
+} from "@/lib/payments";
 import { toast } from "sonner";
 import { tournamentJoinReturnPath } from "@/lib/tournamentJoinIntent";
 
@@ -44,8 +49,14 @@ export function profileHandleForTitle(gameHandles, titleKey) {
 /**
  * Full registration flow (solo / team, optional entry fee + payment rails).
  * `tournament` should include at least: id, name, tenant_id, roster_size, entry_fee, currency, game_title (optional).
+ * `initialPayment` — from checkout return URL / sessionStorage: { reference, provider }.
  */
-export default function TournamentJoinModal({ tournament, onClose, extraInvalidateQueryKeys = [] }) {
+export default function TournamentJoinModal({
+  tournament,
+  onClose,
+  extraInvalidateQueryKeys = [],
+  initialPayment = null,
+}) {
   const { isAuthenticated, isLoadingAuth } = useAuth();
   const queryClient = useQueryClient();
   const rosterSize = Number(tournament.roster_size) || 1;
@@ -56,19 +67,37 @@ export default function TournamentJoinModal({ tournament, onClose, extraInvalida
     .trim()
     .toUpperCase() || "USD";
 
+  const bootstrapPay = useMemo(() => {
+    if (initialPayment?.reference) {
+      return {
+        reference: String(initialPayment.reference).trim(),
+        provider: inferPaymentProviderFromRef(initialPayment.reference, initialPayment.provider),
+      };
+    }
+    const stored = readStoredCheckoutRef(tournament.id);
+    if (stored?.reference) {
+      return {
+        reference: String(stored.reference).trim(),
+        provider: inferPaymentProviderFromRef(stored.reference, stored.provider),
+      };
+    }
+    return null;
+  }, [initialPayment, tournament.id]);
+
   const [form, setForm] = useState({
     teamName: "",
     tag: "",
     captainEmail: "",
     members: "",
     memberGameIds: "",
-    paymentRef: "",
-    payProvider: "stripe",
+    paymentRef: bootstrapPay?.reference || "",
+    payProvider: bootstrapPay?.provider || "stripe",
     captainGameId: "",
   });
   const [joinFlow, setJoinFlow] = useState(soloOk ? "solo" : "team");
   const [done, setDone] = useState(false);
-  const [payMode, setPayMode] = useState("wallet");
+  const [payMode, setPayMode] = useState(bootstrapPay?.reference ? "instant" : "wallet");
+  const autoVerifyRan = useRef(false);
 
   const { data: me } = useQuery({
     queryKey: ["auth-me-join-modal"],
@@ -125,9 +154,56 @@ export default function TournamentJoinModal({ tournament, onClose, extraInvalida
 
   useEffect(() => {
     if (entryFee <= 0) return;
+    if (bootstrapPay?.reference) {
+      setPayMode("instant");
+      return;
+    }
     if (walletBalance + 1e-9 >= entryFee) setPayMode("wallet");
     else setPayMode("instant");
-  }, [entryFee, walletBalance, tournament.id]);
+  }, [entryFee, walletBalance, tournament.id, bootstrapPay?.reference]);
+
+  /** After provider checkout return: auto-verify ledger (or accept dev reference). */
+  useEffect(() => {
+    if (!isAuthenticated || isLoadingAuth || entryFee <= 0 || !bootstrapPay?.reference) return;
+    if (autoVerifyRan.current) return;
+    autoVerifyRan.current = true;
+    const provider = bootstrapPay.provider || "stripe";
+    const reference = bootstrapPay.reference;
+    setForm((f) => ({
+      ...f,
+      paymentRef: reference,
+      payProvider: provider === "dev" ? "ledger" : provider,
+    }));
+    setPayMode("instant");
+
+    const run = async () => {
+      if (provider === "dev" || provider === "ledger") {
+        toast.success("Payment reference ready — complete join.");
+        return;
+      }
+      try {
+        const cap = String(me?.email || form.captainEmail || "")
+          .trim()
+          .toLowerCase();
+        const data = await maxikay.payments.verifyEntryReference({
+          tournament_id: tournament.id,
+          provider,
+          reference,
+          captain_email: cap || undefined,
+        });
+        if (data?.duplicate) toast.info("Payment already on file — you can complete join.");
+        else toast.success("Payment verified — complete join.");
+        clearStoredCheckoutRef(tournament.id);
+      } catch (err) {
+        // Join path can still verify-on-join if webhook wrote ledger later.
+        toast.message("Could not auto-verify yet", {
+          description: err?.data?.error || err?.message || "Use Verify with provider, then Join.",
+        });
+      }
+    };
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per modal open with bootstrap ref
+  }, [isAuthenticated, isLoadingAuth, entryFee, bootstrapPay, tournament.id, me?.email]);
 
   const payProviderSelectValue = useMemo(() => {
     const p = form.payProvider;
@@ -216,6 +292,7 @@ export default function TournamentJoinModal({ tournament, onClose, extraInvalida
     },
     onSuccess: () => {
       setDone(true);
+      clearStoredCheckoutRef(tournament.id);
       queryClient.invalidateQueries({ queryKey: ["discovery-catalog"] });
       queryClient.invalidateQueries({ queryKey: ["tournaments"] });
       queryClient.invalidateQueries({ queryKey: ["auth-me-wallet"] });
@@ -257,7 +334,11 @@ export default function TournamentJoinModal({ tournament, onClose, extraInvalida
         toast.error(err.data?.error || "Link your game ID in Settings before joining.");
         return;
       }
-      toast.error(err.message || "Could not join");
+      if (err.status === 403 && err.data?.code) {
+        toast.error(err.data?.error || "You are not eligible for this event.");
+        return;
+      }
+      toast.error(err.data?.error || err.message || "Could not join");
     },
   });
 
@@ -294,6 +375,20 @@ export default function TournamentJoinModal({ tournament, onClose, extraInvalida
           <div>
             <h2 className="font-display font-bold text-base text-foreground">Join Tournament</h2>
             <p className="text-xs text-muted-foreground mt-0.5">{tournament.name}</p>
+            {(tournament.eligibility_notes ||
+              (Array.isArray(tournament.allowed_regions) && tournament.allowed_regions.length > 0) ||
+              tournament.min_team_elo ||
+              tournament.require_game_handle) && (
+              <div className="mt-2 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-[11px] text-muted-foreground space-y-0.5">
+                <p className="font-semibold text-primary text-[10px] uppercase tracking-wider">Eligibility</p>
+                {tournament.eligibility_notes ? <p>{tournament.eligibility_notes}</p> : null}
+                {Array.isArray(tournament.allowed_regions) && tournament.allowed_regions.length > 0 ? (
+                  <p>Regions: {tournament.allowed_regions.join(", ").toUpperCase()}</p>
+                ) : null}
+                {tournament.min_team_elo ? <p>Min team Elo: {tournament.min_team_elo}</p> : null}
+                {tournament.require_game_handle ? <p>Linked game ID required</p> : null}
+              </div>
+            )}
           </div>
           <button
             type="button"

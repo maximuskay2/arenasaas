@@ -9,6 +9,7 @@ import {
 } from './prizeCalculator.js';
 import { enqueueFcmNotificationJob } from '../jobs/fcmNotificationQueue.js';
 import { recomputeLeagueStandings } from './leagueStandings.js';
+import { sendPlatformEmail } from '../mail/sendPlatformEmail.js';
 
 async function captainUserIdForTeam(client, teamId) {
   const { rows } = await client.query(`SELECT captain_email FROM teams WHERE id::text = $1 LIMIT 1`, [String(teamId)]);
@@ -218,10 +219,25 @@ export async function runTournamentPrizePayout(tournamentId, tenantId) {
         );
 
         enqueueFcmNotificationJob({
+          user_sub: String(userId),
           user_id: String(userId),
           title: 'Victory confirmed',
           body: `${cur} ${Number(line.amount).toFixed(2)} credited to your vault for ${title}.`,
         });
+
+        try {
+          const em = await client.query(`SELECT email FROM users WHERE id::text = $1 LIMIT 1`, [String(userId)]);
+          const to = em.rows[0]?.email;
+          if (to) {
+            await sendPlatformEmail({
+              to: String(to),
+              subject: `Victory — ${title}`,
+              text: `You placed ${ordinal(line.rank)} in ${title}. ${cur} ${Number(line.amount).toFixed(2)} was credited to your vault.`,
+            });
+          }
+        } catch (mailErr) {
+          console.warn('[prizePayout] victory email', mailErr?.message || mailErr);
+        }
       }
 
       const psDone = normalizePrizeStructure(tournament.prize_structure);

@@ -52,9 +52,16 @@ export default function PlayerCheckin() {
 
   const checkInMutation = useMutation({
     mutationFn: () => {
+      // Mirror MatchDetail: when both sides are in, advance status to checked_in.
       const update = isTeamA
-        ? { team_a_checked_in: true }
-        : { team_b_checked_in: true };
+        ? {
+            team_a_checked_in: true,
+            status: match.team_b_checked_in ? "checked_in" : match.status || "check_in_open",
+          }
+        : {
+            team_b_checked_in: true,
+            status: match.team_a_checked_in ? "checked_in" : match.status || "check_in_open",
+          };
       return maxikay.entities.Match.update(match.id, {
         ...update,
         expected_version: match.version ?? 1,

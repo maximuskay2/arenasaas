@@ -43,8 +43,8 @@
 | Section | Status |
 |---------|--------|
 | **§5 Formats** | Swiss / double elim / round robin — present in types/UI to varying degrees; **bracket job stub** only vs §5.5 async generators. |
-| **§6 Game integration** | **`/api/oauth/:provider/start|callback`** returns **501** stubs (`server/src/routes/oauthStub.js`) — no Steam/Riot linking pipeline. |
-| **§7 Notifications** | Email helpers exist; **in-process FCM job queue** + **`POST/GET /api/system/notification-jobs/fcm`** + drain calling **`fcmStub`** (`server/src/jobs/fcmNotificationQueue.js`). **No** Firebase Admin or Redis-backed worker yet. |
+| **§6 Game integration** | **OAuth env-gated:** Discord / Steam / Riot start+callback (`server/src/routes/oauthRoutes.js`) write `users.game_handles` + `_oauth` meta; 501 when secrets missing. Score auto-import still stub. |
+| **§7 Notifications** | **`sendPlatformEmail`** (Resend/SMTP/stub) on join + prize victory; **FCM** via Firebase Admin when `FIREBASE_SERVICE_ACCOUNT_JSON` is set; in-process queue **auto-drains** (`FCM_AUTO_DRAIN`); Central Station still has enqueue/drain. |
 | **§8.5 Compliance** | Auth + public IP limits; **`apiWriteLimiter`** on **`/api/*`**. **`GET /auth/export-my-data`**. Expanded platform-admin **audit_logs**; full GDPR automation + tenant write auditing **not** complete. |
 | **§9 Services** | Monolith Express, not decomposed services. |
 | **§10 Infra** | Docker Compose Postgres+Redis; **`forfeit-worker`** (**`--profile workers`**). API does not auto-start workers. |
@@ -53,11 +53,14 @@
 
 ## Suggested implementation order (next work)
 
-1. **Match-detail E2E** — score / check-in paths on a seeded or fixture match.  
-2. **G3 hardening** — `releasePayout` Stripe Connect path; subscription lifecycle (cancel/renew) beyond fixed window.  
-3. ~~**Silent refresh on 401**~~ — **Done** in `arenaClient.js` (`trySilentRefresh` + one retry).  
-4. **Redis/BullMQ** — replace in-process **bracket** + **FCM** queues when scaling past one API instance.  
-5. **Flutter + real FCM** — parallel track when web money + engine gates are stable.
+1. ~~**Match-detail E2E**~~ — **Done:** `tests/e2e/match-engine-api.spec.js` + `npm run test:paid-join` / match-lock race.  
+2. **G3 hardening** — live Stripe/Paystack/Flutterwave **keys in prod** (ops). Code: subscription `past_due` / `canceled` blocks tournament create (`entitlements.js` + tests).  
+3. ~~**Silent refresh on 401**~~ — **Done**.  
+4. **Redis/BullMQ** — prize + bracket workers exist; keep multi-instance FCM on Redis when scaling.  
+5. ~~**Flutter mobile client**~~ — **Shipped baseline** in `mobile/` (discover, join, live, rankings team/player, auth, FCM register stub). Wire real Firebase + deep links for store release.  
+6. ~~**Player Elo**~~ — solo 1v1 updates `entity_kind=player` + `player_elo_links`; rankings `?kind=player`.  
+7. ~~**Multi-stream CRUD**~~ — `tournament_streams` API + StreamManager UI + Match Live selector.  
+8. ~~**Discord engagement**~~ — optional `DISCORD_WEBHOOK_URL` on match complete (webhook, not full bot).
 
 ---
 

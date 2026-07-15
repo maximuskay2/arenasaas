@@ -24,7 +24,7 @@ import { clientSafeErrorMessage } from './clientSafeError.js';
 import { pool } from './db.js';
 import { platformGateMiddleware } from './middleware/platformGate.js';
 import { setRealtimeIo } from './realtime.js';
-import oauthStubRoutes from './routes/oauthStub.js';
+import oauthRoutes from './routes/oauthRoutes.js';
 import tenantRegistrationRoutes from './routes/tenantRegistrationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import matchEngineRoutes from './routes/matchEngineRoutes.js';
@@ -33,18 +33,39 @@ import publicCommunityRoutes from './routes/publicCommunityRoutes.js';
 import feedAliasRoutes from './routes/feedAliasRoutes.js';
 import gameTaxonomyRoutes from './routes/gameTaxonomyRoutes.js';
 import gameTaxonomyWriteRoutes from './routes/gameTaxonomyWriteRoutes.js';
+import tournamentStreamRoutes from './routes/tournamentStreamRoutes.js';
 import { startPrizePayoutBullWorker } from './jobs/prizePayoutBullmq.js';
+import { startBracketBullWorker } from './jobs/bracketJobQueue.js';
 import { optionalAuth } from './middleware/auth.js';
 
 const app = express();
 app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT) || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const CORS_ORIGINS = [FRONTEND_URL, /^http:\/\/127\.0\.0\.1:\d+$/, /^http:\/\/localhost:\d+$/];
+/** Browser origins; Flutter native apps do not send Origin / ignore CORS. */
+const CORS_ORIGINS = [
+  FRONTEND_URL,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^http:\/\/localhost:\d+$/,
+  // LAN devices during mobile web / Expo-style debugging
+  /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/,
+  /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/,
+];
+const EXTRA_CORS = String(process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: CORS_ORIGINS,
+    origin(origin, cb) {
+      if (!origin) return cb(null, true); // curl / mobile native
+      if (CORS_ORIGINS.some((o) => (o instanceof RegExp ? o.test(origin) : o === origin))) {
+        return cb(null, true);
+      }
+      if (EXTRA_CORS.includes(origin)) return cb(null, true);
+      return cb(null, false);
+    },
     credentials: true,
   })
 );
@@ -93,13 +114,15 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/tenant-registration', apiWriteLimiter, platformGateMiddleware, tenantRegistrationRoutes);
 app.use('/api', apiWriteLimiter);
 app.use('/api', platformGateMiddleware, tournamentJoinRoutes);
-app.use('/api/oauth', oauthStubRoutes);
+app.use('/api/oauth', oauthRoutes);
 app.use('/api/v1/platform-config', platformConfigRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/engine', platformGateMiddleware, tenantMembershipMiddleware, engineRoutes);
 app.use('/api/payments', platformGateMiddleware, tenantMembershipMiddleware, paymentsRoutes);
 app.use('/api/notifications', platformGateMiddleware, notificationRoutes);
 app.use('/api/match-engine', platformGateMiddleware, tenantMembershipMiddleware, matchEngineRoutes);
+app.use('/api/catalog', platformGateMiddleware, tenantMembershipMiddleware, tournamentStreamRoutes);
+app.use('/api', platformGateMiddleware, tenantMembershipMiddleware, tournamentStreamRoutes);
 app.use('/api/community', apiWriteLimiter, platformGateMiddleware, communityRoutes);
 app.use('/api/feed', apiWriteLimiter, platformGateMiddleware, feedAliasRoutes);
 app.use(
@@ -176,6 +199,13 @@ async function start() {
   });
   setRealtimeIo(io);
   startPrizePayoutBullWorker();
+  startBracketBullWorker();
+  // Single-instance always-on forfeit poller (set FORFEIT_WORKER=0 to disable when using compose worker).
+  if (String(process.env.FORFEIT_WORKER || '1') !== '0') {
+    import('./workers/forfeitWorker.js')
+      .then((m) => m.startForfeitWorker())
+      .catch((e) => console.error('[forfeit-worker] start', e));
+  }
   server.listen(PORT, () => {
     console.log(`Arena API http://localhost:${PORT} (HTTP + Socket.io)`);
   });

@@ -54,8 +54,8 @@ function FeedLink({ icon: Icon, label, active, onClick }) {
       onClick={onClick}
       className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
         active
-          ? "bg-primary font-black italic text-primary-foreground shadow-lg shadow-primary/20"
-          : "font-bold text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+          ? "bg-primary/15 text-primary ring-1 ring-primary/30 font-display font-bold shadow-arena-glow"
+          : "font-semibold text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -123,23 +123,23 @@ function MediaEmbed({ url }) {
       return (
         <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border/50 bg-black/30 p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Match results</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-primary">{(match.status || "match").replace(/_/g, " ")}</span>
+            <span className="section-label">Match results</span>
+            <span className="text-[10px] font-display font-bold uppercase tracking-widest text-primary">{(match.status || "match").replace(/_/g, " ")}</span>
           </div>
           <div className="flex-1 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground truncate">{match.team_a_name || "Team A"}</p>
-              <p className="text-3xl font-black italic text-primary tabular-nums">{match.score_a ?? 0}</p>
+              <p className="text-3xl font-display font-bold text-primary tabular-nums">{match.score_a ?? 0}</p>
             </div>
-            <div className="text-muted-foreground font-black text-sm">VS</div>
+            <div className="text-muted-foreground font-display font-bold text-sm">VS</div>
             <div className="min-w-0 text-right">
               <p className="text-xs text-muted-foreground truncate">{match.team_b_name || "Team B"}</p>
-              <p className="text-3xl font-black italic text-primary tabular-nums">{match.score_b ?? 0}</p>
+              <p className="text-3xl font-display font-bold text-primary tabular-nums">{match.score_b ?? 0}</p>
             </div>
           </div>
           <a
             href={`/matches/${match.id}`}
-            className="text-[10px] font-black uppercase tracking-wider text-primary hover:underline"
+            className="text-[10px] font-display font-bold uppercase tracking-wider text-primary hover:underline"
           >
             Open match
           </a>
@@ -364,22 +364,31 @@ export default function CommunityHub() {
   const orgLabel = tenantConfig?.tenant_name || "Your org";
 
   return (
-    <div className="min-h-screen bg-background">
-      {readOnly ? <PublicSiteHeader /> : null}
-      <div className="mx-auto max-w-7xl px-6 pt-6">
+    <div className={readOnly ? "min-h-screen arena-stage" : ""}>
+      {readOnly ? (
+        <div className="arena-content min-h-screen">
+          <PublicSiteHeader />
+        </div>
+      ) : null}
+      <div className={`mx-auto max-w-7xl px-4 md:px-6 pt-4 md:pt-6 ${readOnly ? "arena-content" : ""}`}>
         <PageHeader
-          title="Community"
-          subtitle="War room — announcements, strategy, and recruitment"
+          eyebrow="Social"
+          title={
+            <>
+              Community <span className="text-gradient-primary">war room</span>
+            </>
+          }
+          subtitle="Announcements, strategy threads, recruitment, and match media"
         />
       </div>
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 p-6 font-sans selection:bg-primary/30 lg:grid-cols-5">
+      <div className={`mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:p-6 selection:bg-primary/30 lg:grid-cols-5 ${readOnly ? "arena-content" : ""}`}>
         <aside className="hidden space-y-6 lg:block lg:col-span-1">
-          <div className="space-y-4 rounded-3xl border border-border/50 bg-card/40 p-6 backdrop-blur-sm">
-            <h3 className="text-[10px] font-black uppercase italic tracking-[0.2em] text-muted-foreground">
-              Command center
+          <div className="space-y-4 rounded-3xl glass border border-border/50 p-5 shadow-arena-card sticky top-20">
+            <h3 className="section-label">
+              Channels
             </h3>
-            <nav className="flex flex-col gap-2">
+            <nav className="flex flex-col gap-1.5">
               <FeedLink
                 icon={Megaphone}
                 label="Platform feed"
@@ -396,7 +405,7 @@ export default function CommunityHub() {
               ) : null}
             </nav>
             <div className="border-t border-border/40 pt-4">
-              <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+              <p className="mb-2 section-label">
                 Filter
               </p>
               <FeedLink
@@ -428,9 +437,9 @@ export default function CommunityHub() {
         </aside>
 
         <section className="space-y-6 lg:col-span-4">
-          <div className="space-y-4 rounded-[2rem] border border-primary/20 bg-card/30 p-6 backdrop-blur-xl">
+          <div className="space-y-4 rounded-3xl glass border border-primary/20 p-5 md:p-6 shadow-arena-card">
             <div className="flex gap-4">
-              <div className="h-10 w-10 shrink-0 rounded-full border border-border/50 bg-muted" />
+              <div className="h-10 w-10 shrink-0 rounded-full border border-primary/25 bg-gradient-to-br from-primary/30 to-accent/20" />
               <div className="min-w-0 flex-1 space-y-3">
                 {readOnly ? (
                   <p className="text-xs text-muted-foreground">
@@ -641,16 +650,16 @@ const PostCard = forwardRef(function PostCard(
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group rounded-[2.5rem] border border-border/50 bg-card/20 p-6 transition-all hover:border-border"
+      className="group rounded-3xl glass border border-border/50 p-5 md:p-6 transition-all hover:border-primary/30 shadow-arena-card"
     >
       <header className="mb-4 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary to-accent" />
+          <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/50 to-accent/40 ring-1 ring-primary/30" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-black uppercase italic tracking-tighter">{author}</span>
+              <span className="font-display font-bold tracking-tight">{author}</span>
               {post.post_type === "announcement" ? (
-                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[8px] italic text-primary">
+                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[8px] font-display text-primary">
                   Official
                 </Badge>
               ) : null}
@@ -660,7 +669,7 @@ const PostCard = forwardRef(function PostCard(
                 </Badge>
               ) : null}
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               {moment(post.created_date).fromNow()} · {post.post_type?.replace(/_/g, " ")}
             </span>
           </div>
@@ -698,7 +707,7 @@ const PostCard = forwardRef(function PostCard(
 
       <div className="mb-4 space-y-3">
         {post.title ? (
-          <h2 className="text-xl font-black uppercase italic tracking-tighter">{post.title}</h2>
+          <h2 className="text-lg md:text-xl font-display font-bold tracking-tight">{post.title}</h2>
         ) : null}
         <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-muted-foreground">
           {post.content}
@@ -709,7 +718,7 @@ const PostCard = forwardRef(function PostCard(
       <footer className="flex flex-wrap gap-4 border-t border-border/40 pt-4">
         <button
           type="button"
-          className={`flex items-center gap-2 text-[10px] font-black uppercase italic transition-colors ${
+          className={`flex items-center gap-2 text-[10px] font-display font-bold uppercase tracking-wider transition-colors ${
             post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-primary"
           }`}
           onClick={onLike}
@@ -720,7 +729,7 @@ const PostCard = forwardRef(function PostCard(
         </button>
         <button
           type="button"
-          className="flex items-center gap-2 text-[10px] font-black uppercase italic text-muted-foreground transition-colors hover:text-foreground"
+          className="flex items-center gap-2 text-[10px] font-display font-bold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
           onClick={onToggleExpand}
         >
           <MessageSquare className="h-4 w-4" />

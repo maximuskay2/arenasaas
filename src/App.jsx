@@ -1,9 +1,11 @@
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import ThemeProvider from '@/components/theme/ThemeProvider';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
@@ -60,6 +62,9 @@ import PlayerHubHome from './pages/player/PlayerHubHome';
 import PlayerHubMatches from './pages/player/PlayerHubMatches';
 import PlayerHubTeams from './pages/player/PlayerHubTeams';
 import PlayerHubSettings from './pages/player/PlayerHubSettings';
+import PlayerVault from './pages/player/PlayerVault';
+import OpsBoard from './pages/OpsBoard';
+import WatchHub from './pages/WatchHub';
 import CommunityHub from './pages/CommunityHub';
 import PublicShell from './components/layout/PublicShell';
 import { applyTenantBranding } from './lib/whiteLabelManager';
@@ -77,15 +82,18 @@ function OrganizerAppRoutes() {
         <Route path="/dashboard" element={<PlayerHubHome />} />
         <Route path="/dashboard/matches" element={<PlayerHubMatches />} />
         <Route path="/dashboard/teams" element={<PlayerHubTeams />} />
-        <Route path="/dashboard/wallet" element={<Wallet />} />
+        <Route path="/dashboard/wallet" element={<PlayerVault />} />
         <Route path="/dashboard/settings" element={<PlayerHubSettings />} />
         <Route path="/" element={<Dashboard />} />
+        <Route path="/league/ops" element={<RequireLeagueHost><OpsBoard /></RequireLeagueHost>} />
+        <Route path="/ops" element={<RequireLeagueHost><OpsBoard /></RequireLeagueHost>} />
         <Route path="/league/tournaments" element={<RequireLeagueHost><Tournaments /></RequireLeagueHost>} />
         <Route path="/tournaments/new" element={<RequireLeagueHost><TournamentCreate /></RequireLeagueHost>} />
         <Route path="/tournaments/:id/lobby" element={<TournamentLobby />} />
         <Route path="/tournaments/:id" element={<TournamentDetail />} />
         <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
         <Route path="/tournaments" element={<TournamentDiscovery showPublicHeader={false} />} />
+        <Route path="/watch" element={<WatchHub />} />
         <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
         <Route path="/matches" element={<Matches />} />
         <Route path="/matches/:matchId/lobby" element={<MatchLobby />} />
@@ -140,8 +148,12 @@ const AuthenticatedApp = () => {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 arena-stage">
+        <div className="arena-content relative">
+          <div className="w-12 h-12 rounded-full border-2 border-primary/20" />
+          <div className="w-12 h-12 rounded-full border-2 border-transparent border-t-primary animate-spin absolute inset-0" />
+        </div>
+        <p className="arena-content section-label">Loading Arena…</p>
       </div>
     );
   }
@@ -176,6 +188,7 @@ const AuthenticatedApp = () => {
           <Route path="/tournaments/:id" element={<TournamentDetail />} />
           <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
           <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
+          <Route path="/watch" element={<PublicShell><WatchHub /></PublicShell>} />
           <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
           <Route path="/free-agents" element={<PublicShell><FreeAgents /></PublicShell>} />
           <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
@@ -186,7 +199,7 @@ const AuthenticatedApp = () => {
             <Route path="/dashboard" element={<PlayerHubHome />} />
             <Route path="/dashboard/matches" element={<PlayerHubMatches />} />
             <Route path="/dashboard/teams" element={<PlayerHubTeams />} />
-            <Route path="/dashboard/wallet" element={<Wallet />} />
+            <Route path="/dashboard/wallet" element={<PlayerVault />} />
             <Route path="/dashboard/settings" element={<PlayerHubSettings />} />
             <Route path="/community" element={<CommunityHub />} />
           </Route>
@@ -228,6 +241,7 @@ const AuthenticatedApp = () => {
         <Route path="/tournaments/:id" element={<TournamentDetail />} />
         <Route path="/teams/p/:teamId" element={<PublicTeamProfile />} />
         <Route path="/discover" element={<Navigate to="/tournaments" replace />} />
+        <Route path="/watch" element={<PublicShell><WatchHub /></PublicShell>} />
         <Route path="/rankings" element={<PublicShell><PowerRankings /></PublicShell>} />
         <Route path="/free-agents" element={<PublicShell><FreeAgents /></PublicShell>} />
         <Route path="/matches/:matchId/live" element={<PublicShell><MatchLive /></PublicShell>} />
@@ -238,7 +252,7 @@ const AuthenticatedApp = () => {
           <Route path="/dashboard" element={<PlayerHubHome />} />
           <Route path="/dashboard/matches" element={<PlayerHubMatches />} />
           <Route path="/dashboard/teams" element={<PlayerHubTeams />} />
-          <Route path="/dashboard/wallet" element={<Wallet />} />
+          <Route path="/dashboard/wallet" element={<PlayerVault />} />
           <Route path="/dashboard/settings" element={<PlayerHubSettings />} />
           <Route path="/community" element={<CommunityHub />} />
         </Route>
@@ -266,19 +280,22 @@ function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router
-          future={{
-            v7_startTransition: true,
-            v7_relativeSplatPath: true,
-          }}
-        >
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
+            <AuthenticatedApp />
+          </Router>
+          <Toaster />
+          <SonnerToaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

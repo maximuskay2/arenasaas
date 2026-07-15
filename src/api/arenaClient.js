@@ -275,6 +275,27 @@ export const arena = {
     async meAccolades() {
       return request('GET', '/api/auth/me/accolades');
     },
+    async meMatches(params = {}) {
+      const qs = new URLSearchParams();
+      if (params.limit != null) qs.set('limit', String(params.limit));
+      const q = qs.toString();
+      return request('GET', `/api/auth/me/matches${q ? `?${q}` : ''}`);
+    },
+    async meTeams() {
+      return request('GET', '/api/auth/me/teams');
+    },
+    async meHub() {
+      return request('GET', '/api/auth/me/hub');
+    },
+    async meWatchlist() {
+      return request('GET', '/api/auth/me/watchlist');
+    },
+    async meWatchlistAdd(tournamentId) {
+      return request('POST', `/api/auth/me/watchlist/${encodeURIComponent(tournamentId)}`);
+    },
+    async meWatchlistRemove(tournamentId) {
+      return request('DELETE', `/api/auth/me/watchlist/${encodeURIComponent(tournamentId)}`);
+    },
     async mePrizePayoutKyc() {
       return request('GET', '/api/auth/me/prize-payout-kyc');
     },
@@ -433,11 +454,20 @@ export const arena = {
     },
     /** Stats strip + recent / upcoming / live + top orgs, teams, games (catalog visibility). */
     discoveryDashboard: () => request('GET', '/api/public/discovery/dashboard'),
+    liveMatches: (params = {}) => {
+      const qs = new URLSearchParams();
+      if (params.limit != null) qs.set('limit', String(params.limit));
+      const q = qs.toString();
+      return request('GET', `/api/public/live-matches${q ? `?${q}` : ''}`);
+    },
+    opsBoard: (tenantId) =>
+      request('GET', `/api/public/ops-board?tenant_id=${encodeURIComponent(tenantId)}`),
     matchWatchMeta: (matchId) =>
       request('GET', `/api/public/match/${encodeURIComponent(matchId)}/watch`),
     powerRankings: (params = {}) => {
       const q = new URLSearchParams();
       if (params.limit != null) q.set('limit', String(params.limit));
+      if (params.kind) q.set('kind', String(params.kind));
       const s = q.toString();
       return request('GET', `/api/public/power-rankings${s ? `?${s}` : ''}`);
     },
@@ -452,6 +482,14 @@ export const arena = {
       if (opts.idempotencyKey) headers['Idempotency-Key'] = String(opts.idempotencyKey);
       return request('POST', `/api/tournaments/${encodeURIComponent(tournamentId)}/join`, { body, headers });
     },
+    listStreams: (tournamentId) =>
+      request('GET', `/api/tournaments/${encodeURIComponent(tournamentId)}/streams`),
+    addStream: (tournamentId, body) =>
+      request('POST', `/api/tournaments/${encodeURIComponent(tournamentId)}/streams`, { body }),
+    updateStream: (streamId, body) =>
+      request('PATCH', `/api/streams/${encodeURIComponent(streamId)}`, { body }),
+    deleteStream: (streamId) =>
+      request('DELETE', `/api/streams/${encodeURIComponent(streamId)}`),
   },
 
   engine: {
@@ -495,6 +533,8 @@ export const arena = {
   payments: {
     /** Verify Stripe cs_/pi_, Paystack reference, or Flutterwave tx_ref and record payment_ledger for join. */
     verifyEntryReference: (body) => request('POST', '/api/payments/verify-entry-reference', { body }),
+    /** Non-production: write completed entry_fee ledger without provider keys. */
+    devSimulateEntry: (body) => request('POST', '/api/payments/dev-simulate-entry', { body }),
     createCheckoutSession: (body) => request('POST', '/api/payments/create-checkout-session', { body }),
     createSubscriptionSession: (body) => request('POST', '/api/payments/create-subscription-session', { body }),
     /** Stripe redirect URL, or Paystack/Flutterwave self-service billing metadata. */
@@ -508,6 +548,19 @@ export const arena = {
 
   notifications: {
     registerFcm: (body) => request('POST', '/api/notifications/fcm/register', { body }),
+  },
+
+  oauth: {
+    status: () => request('GET', '/api/oauth/status'),
+    /** Returns { url } for redirect; requires auth. */
+    start: (provider, opts = {}) => {
+      const q = new URLSearchParams();
+      if (opts.returnTo) q.set('returnTo', opts.returnTo);
+      const qs = q.toString() ? `?${q}` : '';
+      return request('GET', `/api/oauth/${encodeURIComponent(provider)}/start${qs}`, {
+        headers: { Accept: 'application/json' },
+      });
+    },
   },
 
   paystack: {

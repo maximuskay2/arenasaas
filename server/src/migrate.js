@@ -43,6 +43,18 @@ async function main() {
     `);
     const sql = readFileSync(rootSchema, 'utf8');
     await pool.query(sql);
+    // Role is also created in rls/002_rls.sql; create early so post-schema GRANTs work on a fresh DB.
+    await pool.query(`
+      DO $role$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'arena_app') THEN
+          CREATE ROLE arena_app LOGIN PASSWORD 'arena_app_dev_change_me'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS NOREPLICATION;
+        END IF;
+      END
+      $role$;
+      GRANT USAGE ON SCHEMA public TO arena_app;
+    `);
     await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT;
@@ -485,6 +497,51 @@ async function main() {
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_xp INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE teams ALTER COLUMN elo SET DEFAULT 1200;
+
+      -- Player profile region + competitive eligibility on tournaments
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_region TEXT DEFAULT 'global';
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS allowed_regions JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS min_team_elo NUMERIC(8, 2);
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS require_game_handle BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS eligibility_notes TEXT;
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS elo_tier TEXT
+        CHECK (elo_tier IS NULL OR elo_tier IN ('community', 'regional', 'premier', 'major'));
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS watchlist_count INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS tournament_watchlist (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tournament_id UUID NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+        created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, tournament_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_watchlist_user ON tournament_watchlist(user_id);
+      GRANT SELECT, INSERT, UPDATE, DELETE ON tournament_watchlist TO arena_app;
+
+      CREATE TABLE IF NOT EXISTS tournament_streams (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tournament_id TEXT NOT NULL,
+        match_id TEXT,
+        tenant_id TEXT,
+        label TEXT NOT NULL DEFAULT 'Main',
+        stream_url TEXT NOT NULL,
+        provider TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+        created_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_tournament_streams_t ON tournament_streams(tournament_id);
+      CREATE INDEX IF NOT EXISTS idx_tournament_streams_m ON tournament_streams(match_id);
+      GRANT SELECT, INSERT, UPDATE, DELETE ON tournament_streams TO arena_app;
+
+      -- Player Elo ladder (solo / 1v1) alongside team prestige
+      ALTER TABLE elo_entities ADD COLUMN IF NOT EXISTS entity_kind TEXT NOT NULL DEFAULT 'team';
+      UPDATE elo_entities SET entity_kind = 'team' WHERE entity_kind IS NULL OR btrim(entity_kind) = '';
+      CREATE TABLE IF NOT EXISTS player_elo_links (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        elo_entity_id UUID NOT NULL REFERENCES elo_entities(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_elo_entities_kind ON elo_entities(entity_kind);
+      GRANT SELECT, INSERT, UPDATE, DELETE ON player_elo_links TO arena_app;
     `);
     const rls = readFileSync(rlsSchema, 'utf8');
     await pool.query(rls);
@@ -501,8 +558,8 @@ main().catch((e) => {
   if (e.code === 'ECONNREFUSED' || e?.errors?.some((x) => x.code === 'ECONNREFUSED')) {
     console.error(
       '\nCould not reach PostgreSQL. Start the DB (e.g. from repo root: docker compose up -d).\n' +
-        'This project maps Postgres to host port 5433 in docker-compose.yml. If your container uses 5432 instead ' +
-        '(older run or another compose file), use localhost:5432 in DATABASE_URL or recreate: docker compose down && docker compose up -d\n'
+        'This project maps Postgres to host port 5435 in docker-compose.yml (avoid clashing with other local stacks). ' +
+        'If your container uses a different host port, use that port in DATABASE_URL or recreate: docker compose down && docker compose up -d\n'
     );
   }
   if (e.code === '28000' && /role .* does not exist/i.test(String(e.message))) {

@@ -19,7 +19,8 @@
     "migrate": "npm run migrate --prefix server",
     "test:g1": "node scripts/g1-cross-tenant.mjs",
     "test:match-lock": "node scripts/match-optimistic-lock.mjs",
-    "test:integration": "npm run test:g1 && npm run test:match-lock",
+    "test:paid-join": "node scripts/paid-join-e2e.mjs",
+    "test:integration": "npm run test:g1 && npm run test:match-lock && npm run test:paid-join",
     "test:media-url": "node --test src/lib/matchResultsMediaUrl.test.js",
     "playwright:install": "playwright install chromium",
     "test:e2e": "playwright test"

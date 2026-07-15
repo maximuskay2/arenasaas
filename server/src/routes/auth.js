@@ -256,7 +256,7 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const row = await runWithRls(pool, rlsContextFromRequest(req), async (client) => {
       const r = await client.query(
-        `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, profile_xp, created_date FROM users WHERE id = $1`,
+        `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, profile_xp, profile_region, created_date FROM users WHERE id = $1`,
         [req.user.sub]
       );
       return r.rows[0] || null;
@@ -410,9 +410,244 @@ router.get('/me/accolades', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Matches where the user is captain or on a roster JSON array for either side's team.
+ */
+router.get('/me/matches', requireAuth, async (req, res) => {
+  try {
+    const email = String(req.user.email || '').trim().toLowerCase();
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    if (!email) return res.json({ matches: [] });
+
+    const rows = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const r = await client.query(
+        `
+        WITH my_teams AS (
+          SELECT t.id::text AS team_id, t.name AS team_name, t.tag, t.tournament_id::text AS tournament_id,
+                 t.status AS team_status, t.captain_email, tn.name AS tournament_name, tn.status AS tournament_status
+          FROM teams t
+          LEFT JOIN tournaments tn ON tn.id::text = t.tournament_id::text
+          WHERE lower(trim(t.captain_email)) = $1
+             OR EXISTS (
+               SELECT 1 FROM jsonb_array_elements(COALESCE(t.roster, '[]'::jsonb)) el
+               WHERE lower(trim(COALESCE(el->>'player_email', el->>'email', ''))) = $1
+             )
+        )
+        SELECT m.*,
+               mt.team_id AS my_team_id,
+               mt.team_name AS my_team_name,
+               mt.tag AS my_team_tag,
+               mt.team_status,
+               mt.tournament_name,
+               mt.tournament_status,
+               CASE
+                 WHEN m.team_a_id::text = mt.team_id THEN 'a'
+                 WHEN m.team_b_id::text = mt.team_id THEN 'b'
+                 ELSE NULL
+               END AS my_side
+        FROM matches m
+        INNER JOIN my_teams mt ON m.tournament_id::text = mt.tournament_id
+          AND (m.team_a_id::text = mt.team_id OR m.team_b_id::text = mt.team_id)
+        ORDER BY
+          CASE m.status
+            WHEN 'in_progress' THEN 0
+            WHEN 'check_in_open' THEN 1
+            WHEN 'checked_in' THEN 2
+            WHEN 'under_dispute' THEN 3
+            WHEN 'pending' THEN 4
+            ELSE 5
+          END,
+          m.scheduled_time NULLS LAST,
+          m.updated_date DESC
+        LIMIT $2
+        `,
+        [email, limit]
+      );
+      return r.rows;
+    });
+    res.json({ matches: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Teams where user is captain or roster member. */
+router.get('/me/teams', requireAuth, async (req, res) => {
+  try {
+    const email = String(req.user.email || '').trim().toLowerCase();
+    if (!email) return res.json({ teams: [] });
+    const rows = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const r = await client.query(
+        `
+        SELECT t.*,
+               tn.name AS tournament_name,
+               tn.status AS tournament_status,
+               tn.game_title,
+               (lower(trim(t.captain_email)) = $1) AS is_captain
+        FROM teams t
+        LEFT JOIN tournaments tn ON tn.id::text = t.tournament_id::text
+        WHERE lower(trim(t.captain_email)) = $1
+           OR EXISTS (
+             SELECT 1 FROM jsonb_array_elements(COALESCE(t.roster, '[]'::jsonb)) el
+             WHERE lower(trim(COALESCE(el->>'player_email', el->>'email', ''))) = $1
+           )
+        ORDER BY t.created_date DESC
+        LIMIT 100
+        `,
+        [email]
+      );
+      return r.rows;
+    });
+    res.json({ teams: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+/** Combined career hub snapshot. */
+router.get('/me/hub', requireAuth, async (req, res) => {
+  try {
+    const email = String(req.user.email || '').trim().toLowerCase();
+    const data = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const wallets = await client.query(
+        `SELECT currency, balance, updated_date FROM user_wallets WHERE user_id = $1::uuid ORDER BY currency`,
+        [req.user.sub]
+      );
+      const accolades = await client.query(
+        `SELECT COUNT(*)::int AS c FROM user_accolades WHERE user_id = $1::uuid`,
+        [req.user.sub]
+      );
+      let matchCount = 0;
+      let teamCount = 0;
+      let liveCount = 0;
+      if (email) {
+        const mc = await client.query(
+          `
+          SELECT COUNT(DISTINCT m.id)::int AS c,
+                 COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'in_progress')::int AS live
+          FROM matches m
+          INNER JOIN teams t ON t.tournament_id::text = m.tournament_id::text
+            AND (m.team_a_id::text = t.id::text OR m.team_b_id::text = t.id::text)
+          WHERE lower(trim(t.captain_email)) = $1
+             OR EXISTS (
+               SELECT 1 FROM jsonb_array_elements(COALESCE(t.roster, '[]'::jsonb)) el
+               WHERE lower(trim(COALESCE(el->>'player_email', el->>'email', ''))) = $1
+             )
+          `,
+          [email]
+        );
+        matchCount = mc.rows[0]?.c || 0;
+        liveCount = mc.rows[0]?.live || 0;
+        const tc = await client.query(
+          `
+          SELECT COUNT(*)::int AS c FROM teams t
+          WHERE lower(trim(t.captain_email)) = $1
+             OR EXISTS (
+               SELECT 1 FROM jsonb_array_elements(COALESCE(t.roster, '[]'::jsonb)) el
+               WHERE lower(trim(COALESCE(el->>'player_email', el->>'email', ''))) = $1
+             )
+          `,
+          [email]
+        );
+        teamCount = tc.rows[0]?.c || 0;
+      }
+      const user = await client.query(
+        `SELECT profile_region, profile_xp, kyc_cleared FROM users WHERE id = $1::uuid`,
+        [req.user.sub]
+      );
+      return {
+        wallets: wallets.rows,
+        accolades_count: accolades.rows[0]?.c || 0,
+        match_count: matchCount,
+        live_match_count: liveCount,
+        team_count: teamCount,
+        profile_region: user.rows[0]?.profile_region || 'global',
+        profile_xp: user.rows[0]?.profile_xp || 0,
+        kyc_cleared: !!user.rows[0]?.kyc_cleared,
+      };
+    });
+    res.json(data);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+router.get('/me/watchlist', requireAuth, async (req, res) => {
+  try {
+    const rows = await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      const r = await client.query(
+        `
+        SELECT t.id, t.name, t.status, t.game_title, t.prize_pool, t.currency, t.start_date, w.created_date AS watched_at
+        FROM tournament_watchlist w
+        INNER JOIN tournaments t ON t.id = w.tournament_id
+        WHERE w.user_id = $1::uuid
+        ORDER BY w.created_date DESC
+        LIMIT 50
+        `,
+        [req.user.sub]
+      );
+      return r.rows;
+    });
+    res.json({ items: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+router.post('/me/watchlist/:tournamentId', requireAuth, async (req, res) => {
+  try {
+    const tid = String(req.params.tournamentId || '').trim();
+    if (!tid) return res.status(400).json({ error: 'tournament id required' });
+    await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      await client.query(
+        `INSERT INTO tournament_watchlist (user_id, tournament_id)
+         SELECT $1::uuid, id FROM tournaments WHERE id::text = $2
+         ON CONFLICT DO NOTHING`,
+        [req.user.sub, tid]
+      );
+      await client.query(
+        `UPDATE tournaments SET watchlist_count = (
+           SELECT COUNT(*)::int FROM tournament_watchlist WHERE tournament_id = tournaments.id
+         ) WHERE id::text = $1`,
+        [tid]
+      );
+    });
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
+router.delete('/me/watchlist/:tournamentId', requireAuth, async (req, res) => {
+  try {
+    const tid = String(req.params.tournamentId || '').trim();
+    await runWithRls(pool, { isPlatformAdmin: true }, async (client) => {
+      await client.query(`DELETE FROM tournament_watchlist WHERE user_id = $1::uuid AND tournament_id::text = $2`, [
+        req.user.sub,
+        tid,
+      ]);
+      await client.query(
+        `UPDATE tournaments SET watchlist_count = (
+           SELECT COUNT(*)::int FROM tournament_watchlist WHERE tournament_id = tournaments.id
+         ) WHERE id::text = $1`,
+        [tid]
+      );
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: clientSafeErrorMessage(e) });
+  }
+});
+
 router.patch('/me', requireAuth, async (req, res) => {
   try {
-    const { full_name, game_handles } = req.body || {};
+    const { full_name, game_handles, profile_region } = req.body || {};
     const sets = [];
     const vals = [];
     let i = 1;
@@ -424,17 +659,21 @@ router.patch('/me', requireAuth, async (req, res) => {
       sets.push(`game_handles = $${i++}::jsonb`);
       vals.push(JSON.stringify(game_handles));
     }
+    if (profile_region !== undefined) {
+      sets.push(`profile_region = $${i++}`);
+      vals.push(String(profile_region || 'global').trim().toLowerCase().slice(0, 32));
+    }
     const row = await runWithRls(pool, rlsContextFromRequest(req), async (client) => {
       if (!sets.length) {
         const r = await client.query(
-          `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, created_date FROM users WHERE id = $1`,
+          `SELECT id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, profile_region, created_date FROM users WHERE id = $1`,
           [req.user.sub]
         );
         return r.rows[0];
       }
       vals.push(req.user.sub);
       const r = await client.query(
-        `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, created_date`,
+        `UPDATE users SET ${sets.join(', ')}, updated_date = NOW() WHERE id = $${vals.length} RETURNING id, email, full_name, role, game_handles, mfa_enabled, kyc_cleared, achievements, profile_region, created_date`,
         vals
       );
       return r.rows[0];
@@ -544,6 +783,7 @@ function formatUser(row, opts = {}) {
     kyc_cleared: !!row.kyc_cleared,
     achievements: row.achievements ?? [],
     profile_xp: Number(row.profile_xp ?? 0),
+    profile_region: row.profile_region || 'global',
     created_date: row.created_date,
     tenant_memberships,
     /** Primary tenant for organizer dashboard (first membership). */
