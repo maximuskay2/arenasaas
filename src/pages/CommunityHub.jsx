@@ -52,7 +52,7 @@ function FeedLink({ icon: Icon, label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
+      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-all ${
         active
           ? "bg-primary/15 text-primary ring-1 ring-primary/30 font-display font-bold shadow-arena-glow"
           : "font-semibold text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
@@ -364,14 +364,21 @@ export default function CommunityHub() {
   const orgLabel = tenantConfig?.tenant_name || "Your org";
 
   return (
-    <div className={readOnly ? "min-h-screen arena-stage" : ""}>
+    <div className={readOnly ? "min-h-screen arena-stage flex flex-col" : "w-full flex flex-col"}>
+      {/* Header must NOT sit in its own min-h-screen shell (that left a full viewport of empty space). */}
       {readOnly ? (
-        <div className="arena-content min-h-screen">
+        <div className="arena-content shrink-0">
           <PublicSiteHeader />
         </div>
       ) : null}
-      <div className={`mx-auto max-w-7xl px-4 md:px-6 pt-4 md:pt-6 ${readOnly ? "arena-content" : ""}`}>
+
+      <div
+        className={`mx-auto w-full max-w-7xl flex-1 px-4 md:px-6 py-4 md:py-5 selection:bg-primary/30 ${
+          readOnly ? "arena-content" : ""
+        }`}
+      >
         <PageHeader
+          className="mb-4 md:mb-5"
           eyebrow="Social"
           title={
             <>
@@ -380,15 +387,14 @@ export default function CommunityHub() {
           }
           subtitle="Announcements, strategy threads, recruitment, and match media"
         />
-      </div>
 
-      <div className={`mx-auto grid max-w-7xl grid-cols-1 gap-8 p-4 md:p-6 selection:bg-primary/30 lg:grid-cols-5 ${readOnly ? "arena-content" : ""}`}>
-        <aside className="hidden space-y-6 lg:block lg:col-span-1">
-          <div className="space-y-4 rounded-3xl glass border border-border/50 p-5 shadow-arena-card sticky top-20">
+        <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-5">
+        <aside className="hidden lg:block lg:col-span-1">
+          <div className="space-y-3 rounded-2xl glass border border-border/50 p-4 shadow-arena-card sticky top-20">
             <h3 className="section-label">
               Channels
             </h3>
-            <nav className="flex flex-col gap-1.5">
+            <nav className="flex flex-col gap-1">
               <FeedLink
                 icon={Megaphone}
                 label="Platform feed"
@@ -404,8 +410,8 @@ export default function CommunityHub() {
                 />
               ) : null}
             </nav>
-            <div className="border-t border-border/40 pt-4">
-              <p className="mb-2 section-label">
+            <div className="border-t border-border/40 pt-3">
+              <p className="mb-1.5 section-label">
                 Filter
               </p>
               <FeedLink
@@ -436,14 +442,53 @@ export default function CommunityHub() {
           </div>
         </aside>
 
-        <section className="space-y-6 lg:col-span-4">
-          <div className="space-y-4 rounded-3xl glass border border-primary/20 p-5 md:p-6 shadow-arena-card">
-            <div className="flex gap-4">
-              <div className="h-10 w-10 shrink-0 rounded-full border border-primary/25 bg-gradient-to-br from-primary/30 to-accent/20" />
-              <div className="min-w-0 flex-1 space-y-3">
+        {/* Mobile channel chips (sidebar hidden on small screens) */}
+        <div className="flex flex-wrap gap-2 lg:hidden">
+          <Button
+            type="button"
+            size="sm"
+            variant={feedScope === "global" ? "default" : "outline"}
+            className="text-[10px] font-display uppercase"
+            onClick={() => setFeedScope("global")}
+          >
+            Global
+          </Button>
+          {tenantId ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={feedScope === "tenant" ? "default" : "outline"}
+              className="text-[10px] font-display uppercase"
+              onClick={() => setFeedScope("tenant")}
+            >
+              {orgLabel}
+            </Button>
+          ) : null}
+          {["all", "announcement", "strategy", "recruitment"].map((c) => (
+            <Button
+              key={c}
+              type="button"
+              size="sm"
+              variant={category === c ? "secondary" : "ghost"}
+              className="text-[10px] font-display uppercase"
+              onClick={() => setCategory(c)}
+            >
+              {c === "all" ? "All" : c}
+            </Button>
+          ))}
+        </div>
+
+        <section className="space-y-4 lg:col-span-4 min-w-0">
+          <div className="space-y-3 rounded-2xl glass border border-primary/20 p-4 md:p-5 shadow-arena-card">
+            <div className="flex gap-3">
+              <div className="h-9 w-9 shrink-0 rounded-full border border-primary/25 bg-gradient-to-br from-primary/30 to-accent/20" />
+              <div className="min-w-0 flex-1 space-y-2.5">
                 {readOnly ? (
                   <p className="text-xs text-muted-foreground">
-                    Viewing as guest. <button type="button" className="text-primary font-bold hover:underline" onClick={navigateToLogin}>Log in</button>{" "}
+                    Viewing as guest.{" "}
+                    <button type="button" className="text-primary font-bold hover:underline" onClick={navigateToLogin}>
+                      Log in
+                    </button>{" "}
                     to post, comment, like, or moderate.
                   </p>
                 ) : null}
@@ -489,7 +534,7 @@ export default function CommunityHub() {
                   placeholder="Share a strategy, clip, or recruitment pitch…"
                   value={composerBody}
                   onChange={(e) => setComposerBody(e.target.value)}
-                  className="min-h-[100px] resize-none border-0 bg-transparent text-sm font-medium focus-visible:ring-0"
+                  className="min-h-[72px] max-h-[160px] resize-y border-0 bg-transparent text-sm font-medium focus-visible:ring-0"
                   disabled={readOnly}
                 />
                 <Input
@@ -501,7 +546,7 @@ export default function CommunityHub() {
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between border-t border-border/40 pt-4">
+            <div className="flex items-center justify-between border-t border-border/40 pt-3">
               <span className="text-[10px] font-black uppercase italic text-muted-foreground">
                 Posting to {feedScope === "global" ? "platform" : orgLabel} ·{" "}
                 {perms.canAnnounce && composerType === "announcement" ? "staff" : "community"}
@@ -523,48 +568,46 @@ export default function CommunityHub() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-48 animate-pulse rounded-[2.5rem] bg-muted/30" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-36 animate-pulse rounded-2xl bg-muted/30" />
               ))}
             </div>
+          ) : !items.length ? (
+            <p className="py-8 text-center text-sm text-muted-foreground rounded-2xl border border-border/40 glass">
+              No posts yet. Open the mic.
+            </p>
           ) : (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                <AnimatePresence mode="popLayout">
-                  {items.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      user={user}
-                      perms={perms}
-                      feedScope={feedScope}
-                      tenantId={tenantId}
-                      readOnly={readOnly}
-                      expanded={expandedPost === post.id}
-                      onToggleExpand={() => setExpandedPost((x) => (x === post.id ? null : post.id))}
-                      onInvalidate={invalidateFeed}
-                      onLike={() => {
-                        if (readOnly) return;
-                        likeMut.mutate({ id: post.id, liked: !!post.liked_by_me });
-                      }}
-                      onOpenShadowban={() => {
-                        setShadowUserId(String(post.author_id || ""));
-                        setShadowScope(feedScope === "global" ? "global" : "tenant");
-                        setShadowOpen(true);
-                      }}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-              {!items.length ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">
-                  No posts yet. Open the mic.
-                </p>
-              ) : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <AnimatePresence mode="popLayout">
+                {items.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    user={user}
+                    perms={perms}
+                    feedScope={feedScope}
+                    tenantId={tenantId}
+                    readOnly={readOnly}
+                    expanded={expandedPost === post.id}
+                    onToggleExpand={() => setExpandedPost((x) => (x === post.id ? null : post.id))}
+                    onInvalidate={invalidateFeed}
+                    onLike={() => {
+                      if (readOnly) return;
+                      likeMut.mutate({ id: post.id, liked: !!post.liked_by_me });
+                    }}
+                    onOpenShadowban={() => {
+                      setShadowUserId(String(post.author_id || ""));
+                      setShadowScope(feedScope === "global" ? "global" : "tenant");
+                      setShadowOpen(true);
+                    }}
+                  />
+                ))}
+              </AnimatePresence>
             </div>
           )}
         </section>
+        </div>
       </div>
 
       <ShadowbanDialog
@@ -650,7 +693,7 @@ const PostCard = forwardRef(function PostCard(
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="group rounded-3xl glass border border-border/50 p-5 md:p-6 transition-all hover:border-primary/30 shadow-arena-card"
+      className="group rounded-2xl glass border border-border/50 p-4 transition-all hover:border-primary/30 shadow-arena-card h-full flex flex-col"
     >
       <header className="mb-4 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
