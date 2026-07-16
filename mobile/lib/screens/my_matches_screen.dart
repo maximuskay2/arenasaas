@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../state/auth_state.dart';
+import '../widgets/arena_ui.dart';
 import 'login_screen.dart';
+import 'match_center_screen.dart';
+import 'match_lobby_screen.dart';
 import 'report_score_screen.dart';
 
 class MyMatchesScreen extends StatefulWidget {
@@ -52,22 +54,16 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
     }
   }
 
-  Future<void> _watch(String matchId) async {
-    try {
-      final meta = await context.read<ApiClient>().matchWatch(matchId);
-      final url = meta['stream_url']?.toString();
-      if (url == null || url.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No stream URL')),
-        );
-        return;
-      }
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
+  void _openCenter(String matchId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: matchId)),
+    );
+  }
+
+  void _openLobby(String matchId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: matchId)),
+    );
   }
 
   @override
@@ -80,30 +76,22 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
       ),
       body: !auth.isLoggedIn
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Sign in to see your matches'),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      );
-                      _load();
-                    },
-                    child: const Text('Sign in'),
-                  ),
-                ],
-              ),
+          ? EmptyState(
+              message: 'Sign in to see your matches',
+              actionLabel: 'Sign in',
+              onAction: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+                _load();
+              },
             )
           : loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const LoadingBody()
               : error != null
-                  ? Center(child: Text(error!))
+                  ? EmptyState(message: error!, actionLabel: 'Retry', onAction: _load)
                   : matches.isEmpty
-                      ? const Center(child: Text('No matches yet — join a tournament'))
+                      ? const EmptyState(message: 'No matches yet — join a tournament')
                       : RefreshIndicator(
                           onRefresh: _load,
                           child: ListView.separated(
@@ -120,61 +108,68 @@ class _MyMatchesScreenState extends State<MyMatchesScreen> {
                                 'check_in_open',
                                 'pending',
                               ].contains(status);
-                              return Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        m['tournament_name']?.toString() ?? 'Tournament',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.white.withValues(alpha: 0.5),
-                                        ),
+                              final live = ['in_progress', 'checked_in', 'live'].contains(status);
+                              return ArenaCard(
+                                onTap: id.isEmpty ? null : () => _openLobby(id),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      m['tournament_name']?.toString() ?? 'Tournament',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withValues(alpha: 0.5),
                                       ),
-                                      const SizedBox(height: 4),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${m['score_a'] ?? 0} – ${m['score_b'] ?? 0} · $status'
+                                          .replaceAll('_', ' '),
+                                    ),
+                                    if (m['my_team_name'] != null)
                                       Text(
-                                        '${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
-                                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                                        'You: ${m['my_team_name']} (${m['my_side'] ?? '?'})',
+                                        style: const TextStyle(color: Color(0xFF00D4FF), fontSize: 12),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${m['score_a'] ?? 0} – ${m['score_b'] ?? 0} · $status'
-                                            .replaceAll('_', ' '),
-                                      ),
-                                      if (m['my_team_name'] != null)
-                                        Text(
-                                          'You: ${m['my_team_name']} (${m['my_side'] ?? '?'})',
-                                          style: const TextStyle(color: Color(0xFF00D4FF), fontSize: 12),
-                                        ),
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          if (canReport && id.isNotEmpty)
-                                            TextButton(
-                                              onPressed: () async {
-                                                await Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => ReportScoreScreen(
-                                                      matchId: id,
-                                                      teamA: '${m['team_a_name'] ?? 'A'}',
-                                                      teamB: '${m['team_b_name'] ?? 'B'}',
-                                                    ),
-                                                  ),
-                                                );
-                                                _load();
-                                              },
-                                              child: const Text('Report score'),
-                                            ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: [
+                                        if (canReport && id.isNotEmpty)
                                           TextButton(
-                                            onPressed: id.isEmpty ? null : () => _watch(id),
-                                            child: const Text('Watch'),
+                                            onPressed: () async {
+                                              await Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => ReportScoreScreen(
+                                                    matchId: id,
+                                                    teamA: '${m['team_a_name'] ?? 'A'}',
+                                                    teamB: '${m['team_b_name'] ?? 'B'}',
+                                                  ),
+                                                ),
+                                              );
+                                              _load();
+                                            },
+                                            child: const Text('Report'),
                                           ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
+                                        TextButton(
+                                          onPressed: id.isEmpty ? null : () => _openLobby(id),
+                                          child: const Text('Lobby'),
+                                        ),
+                                        TextButton(
+                                          onPressed: id.isEmpty
+                                              ? null
+                                              : () => live ? _openCenter(id) : _openLobby(id),
+                                          child: Text(live ? 'Live center' : 'Open'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               );
                             },

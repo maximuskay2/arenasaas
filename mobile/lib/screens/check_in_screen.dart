@@ -4,6 +4,8 @@ import '../services/api_client.dart';
 import '../state/auth_state.dart';
 import '../widgets/arena_ui.dart';
 import 'login_screen.dart';
+import 'match_center_screen.dart';
+import 'match_lobby_screen.dart';
 import 'report_score_screen.dart';
 
 /// Player check-in queue: matches in check_in_open / ready states.
@@ -136,14 +138,36 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                         ),
                                       ),
                                     const SizedBox(height: 10),
-                                    Row(
+                                    Wrap(
+                                      spacing: 8,
                                       children: [
                                         if (status == 'check_in_open' || status == 'pending')
                                           ElevatedButton(
                                             onPressed: () => _checkIn(m),
                                             child: const Text('Check in'),
                                           ),
-                                        const SizedBox(width: 8),
+                                        if (id.isNotEmpty)
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => MatchLobbyScreen(matchId: id),
+                                                ),
+                                              );
+                                            },
+                                            child: const Text('Lobby'),
+                                          ),
+                                        if (status == 'in_progress' || status == 'checked_in' || status == 'live')
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => MatchCenterScreen(matchId: id),
+                                                ),
+                                              );
+                                            },
+                                            child: const Text('Live'),
+                                          ),
                                         if (status == 'in_progress' || status == 'checked_in')
                                           TextButton(
                                             onPressed: () {
@@ -157,7 +181,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                                 ),
                                               );
                                             },
-                                            child: const Text('Report score'),
+                                            child: const Text('Report'),
                                           ),
                                       ],
                                     ),

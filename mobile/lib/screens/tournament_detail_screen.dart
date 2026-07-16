@@ -5,8 +5,13 @@ import 'package:uuid/uuid.dart';
 import '../services/api_client.dart';
 import '../state/auth_state.dart';
 import '../widgets/arena_ui.dart';
+import 'bracket_screen.dart';
 import 'login_screen.dart';
+import 'match_center_screen.dart';
+import 'match_lobby_screen.dart';
+import 'organizer/bracket_tools_screen.dart';
 import 'report_score_screen.dart';
+import 'team_profile_screen.dart';
 
 class _RosterSlot {
   final email = TextEditingController();
@@ -318,6 +323,28 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> with Si
       appBar: AppBar(
         title: Text(name),
         actions: [
+          IconButton(
+            tooltip: 'Bracket',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BracketScreen(tournamentId: widget.tournamentId, tournamentName: name),
+              ),
+            ),
+            icon: const Icon(Icons.account_tree_outlined),
+          ),
+          if (auth.isLeagueHost)
+            IconButton(
+              tooltip: 'Bracket tools',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BracketToolsScreen(
+                    tournamentId: widget.tournamentId,
+                    tournamentName: name,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.build_circle_outlined),
+            ),
           IconButton(onPressed: _watchlistToggle, icon: const Icon(Icons.bookmark_add_outlined)),
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
@@ -359,10 +386,40 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> with Si
                 const SizedBox(height: 8),
                 Text('${t!['description']}'),
               ],
-              if (auth.isLeagueHost) ...[
-                const SizedBox(height: 12),
-                OutlinedButton(onPressed: _finalize, child: const Text('Finalize tournament')),
-              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => BracketScreen(
+                          tournamentId: widget.tournamentId,
+                          tournamentName: name,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.account_tree, size: 18),
+                    label: const Text('View bracket'),
+                  ),
+                  if (auth.isLeagueHost) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BracketToolsScreen(
+                            tournamentId: widget.tournamentId,
+                            tournamentName: name,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.build, size: 18),
+                      label: const Text('Bracket tools'),
+                    ),
+                    OutlinedButton(onPressed: _finalize, child: const Text('Finalize')),
+                  ],
+                ],
+              ),
               const SizedBox(height: 20),
               if (open) ...[
                 const SectionHeader('Join'),
@@ -438,7 +495,13 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> with Si
                   separatorBuilder: (c, i) => const SizedBox(height: 8),
                   itemBuilder: (ctx, i) {
                     final team = Map<String, dynamic>.from(teams[i] as Map);
+                    final teamId = team['id']?.toString() ?? '';
                     return ArenaCard(
+                      onTap: teamId.isEmpty
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => TeamProfileScreen(teamId: teamId)),
+                              ),
                       child: Row(
                         children: [
                           Expanded(
@@ -459,35 +522,89 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> with Si
                 ),
           // Matches
           matches.isEmpty
-              ? const EmptyState(message: 'Bracket not generated yet')
+              ? EmptyState(
+                  message: 'Bracket not generated yet',
+                  actionLabel: auth.isLeagueHost ? 'Bracket tools' : 'View bracket',
+                  onAction: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => auth.isLeagueHost
+                          ? BracketToolsScreen(tournamentId: widget.tournamentId, tournamentName: name)
+                          : BracketScreen(tournamentId: widget.tournamentId, tournamentName: name),
+                    ),
+                  ),
+                )
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
-                  itemCount: matches.length,
+                  itemCount: matches.length + 1,
                   separatorBuilder: (c, i) => const SizedBox(height: 8),
                   itemBuilder: (ctx, i) {
-                    final m = Map<String, dynamic>.from(matches[i] as Map);
+                    if (i == 0) {
+                      return OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => BracketScreen(
+                              tournamentId: widget.tournamentId,
+                              tournamentName: name,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.account_tree_outlined),
+                        label: const Text('Open full bracket'),
+                      );
+                    }
+                    final m = Map<String, dynamic>.from(matches[i - 1] as Map);
                     final id = m['id']?.toString() ?? '';
+                    final st = '${m['status'] ?? ''}';
+                    final live = ['in_progress', 'checked_in', 'live'].contains(st);
                     return ArenaCard(
+                      onTap: id.isEmpty
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => live
+                                      ? MatchCenterScreen(matchId: id)
+                                      : MatchLobbyScreen(matchId: id),
+                                ),
+                              ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('R${m['round'] ?? '?'} · ${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
                               style: const TextStyle(fontWeight: FontWeight.w800)),
                           Text('${m['score_a'] ?? 0} – ${m['score_b'] ?? 0}'),
-                          StatusChip('${m['status'] ?? ''}'),
-                          if (['in_progress', 'checked_in', 'check_in_open'].contains('${m['status']}'))
-                            TextButton(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => ReportScoreScreen(
-                                    matchId: id,
-                                    teamA: '${m['team_a_name'] ?? 'A'}',
-                                    teamB: '${m['team_b_name'] ?? 'B'}',
+                          StatusChip(st),
+                          Wrap(
+                            spacing: 4,
+                            children: [
+                              if (['in_progress', 'checked_in', 'check_in_open'].contains(st) && id.isNotEmpty)
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => ReportScoreScreen(
+                                        matchId: id,
+                                        teamA: '${m['team_a_name'] ?? 'A'}',
+                                        teamB: '${m['team_b_name'] ?? 'B'}',
+                                      ),
+                                    ),
                                   ),
+                                  child: const Text('Report'),
                                 ),
-                              ),
-                              child: const Text('Report score'),
-                            ),
+                              if (id.isNotEmpty)
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: id)),
+                                  ),
+                                  child: const Text('Lobby'),
+                                ),
+                              if (live && id.isNotEmpty)
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: id)),
+                                  ),
+                                  child: const Text('Live'),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api_client.dart';
 
@@ -22,6 +23,7 @@ class _ReportScoreScreenState extends State<ReportScoreScreen> {
   final scoreA = TextEditingController(text: '0');
   final scoreB = TextEditingController(text: '0');
   final pov = TextEditingController();
+  final evidencePaths = <String>[];
   bool busy = false;
 
   @override
@@ -32,18 +34,40 @@ class _ReportScoreScreenState extends State<ReportScoreScreen> {
     super.dispose();
   }
 
+  Future<void> _pickEvidence() async {
+    final picker = ImagePicker();
+    final files = await picker.pickMultiImage(imageQuality: 85);
+    if (files.isEmpty) return;
+    setState(() {
+      evidencePaths
+        ..clear()
+        ..addAll(files.map((f) => f.path));
+    });
+  }
+
   Future<void> _submit() async {
     setState(() => busy = true);
     final messenger = ScaffoldMessenger.of(context);
+    final api = context.read<ApiClient>();
     try {
       final a = int.tryParse(scoreA.text.trim()) ?? 0;
       final b = int.tryParse(scoreB.text.trim()) ?? 0;
-      await context.read<ApiClient>().reportResult(
-            widget.matchId,
-            scoreA: a,
-            scoreB: b,
-            povLink: pov.text.trim().isEmpty ? null : pov.text.trim(),
-          );
+      if (evidencePaths.isNotEmpty) {
+        try {
+          await api.uploadMatchEvidence(widget.matchId, evidencePaths);
+        } catch (e) {
+          // Non-blocking — score still transmits
+          if (mounted) {
+            messenger.showSnackBar(SnackBar(content: Text('Evidence upload: $e')));
+          }
+        }
+      }
+      await api.reportResult(
+        widget.matchId,
+        scoreA: a,
+        scoreB: b,
+        povLink: pov.text.trim().isEmpty ? null : pov.text.trim(),
+      );
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(content: Text('Result submitted')));
       Navigator.of(context).pop(true);
@@ -68,7 +92,7 @@ class _ReportScoreScreenState extends State<ReportScoreScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Both teams must report matching scores to auto-resolve.',
+            'Both teams must report matching scores to auto-resolve. Attach screenshot evidence if the series may dispute.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 13),
           ),
           const SizedBox(height: 20),
@@ -88,6 +112,16 @@ class _ReportScoreScreenState extends State<ReportScoreScreen> {
             controller: pov,
             decoration: const InputDecoration(
               labelText: 'POV / VOD link (optional)',
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _pickEvidence,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: Text(
+              evidencePaths.isEmpty
+                  ? 'Add evidence photos'
+                  : '${evidencePaths.length} photo(s) selected',
             ),
           ),
           const SizedBox(height: 24),

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_client.dart';
 import '../../widgets/arena_ui.dart';
+import '../bracket_screen.dart';
 import '../create_tournament_screen.dart';
 import '../tournament_detail_screen.dart';
+import 'bracket_tools_screen.dart';
 
 class LeagueTournamentsScreen extends StatefulWidget {
   const LeagueTournamentsScreen({super.key});
@@ -79,6 +81,7 @@ class _LeagueTournamentsScreenState extends State<LeagueTournamentsScreen> {
                         itemBuilder: (ctx, i) {
                           final t = Map<String, dynamic>.from(items[i] as Map);
                           final id = t['id']?.toString() ?? '';
+                          final tName = '${t['name'] ?? 'Tournament'}';
                           return ArenaCard(
                             onTap: id.isEmpty
                                 ? null
@@ -94,7 +97,7 @@ class _LeagueTournamentsScreenState extends State<LeagueTournamentsScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${t['name'] ?? 'Tournament'}',
+                                        tName,
                                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                                       ),
                                     ),
@@ -110,6 +113,35 @@ class _LeagueTournamentsScreenState extends State<LeagueTournamentsScreen> {
                                   ].where((e) => e != null && '$e'.isNotEmpty).join(' · '),
                                   style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.5)),
                                 ),
+                                if (id.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => BracketScreen(
+                                              tournamentId: id,
+                                              tournamentName: tName,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Text('Bracket'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => BracketToolsScreen(
+                                              tournamentId: id,
+                                              tournamentName: tName,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Text('Tools'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           );

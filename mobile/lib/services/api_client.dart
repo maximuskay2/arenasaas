@@ -468,7 +468,125 @@ class ApiClient {
         'platform': platform,
       });
 
+  Future<List<dynamic>> listNotifications({int limit = 50}) async {
+    try {
+      return _asList(await request('GET', '/api/v1/Notification', query: {'limit': '$limit'}), 'items');
+    } catch (_) {
+      return _asList(await request('GET', '/api/v1/Notification', query: {'limit': '$limit'}));
+    }
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    try {
+      await patchEntity('Notification', id, {'read': true, 'is_read': true});
+    } catch (_) {}
+  }
+
   // ─── Tenant registration ─────────────────────────────────
   Future<Map<String, dynamic>> registerTenant(Map<String, dynamic> body) async =>
       _asMap(await request('POST', '/api/tenant-registration', body: body));
+
+  // ─── Match evidence (multipart) ──────────────────────────
+  Future<Map<String, dynamic>> uploadMatchEvidence(String matchId, List<String> filePaths) async {
+    final uri = _u('/api/match-engine/matches/$matchId/evidence');
+    final req = http.MultipartRequest('POST', uri);
+    final h = _headers(jsonBody: false);
+    h.remove('Content-Type');
+    req.headers.addAll(h);
+    for (final path in filePaths.take(8)) {
+      req.files.add(await http.MultipartFile.fromPath('screenshots', path));
+    }
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    dynamic data;
+    try {
+      data = res.body.isEmpty ? null : jsonDecode(res.body);
+    } catch (_) {
+      data = res.body;
+    }
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, data is Map ? (data['error']?.toString() ?? 'Upload failed') : 'Upload failed');
+    }
+    return _asMap(data);
+  }
+
+  Future<Map<String, dynamic>> sendLobbyChat(String matchId, String content, {String? tournamentId}) async {
+    return createEntity('ChatMessage', {
+      'match_id': matchId,
+      if (tournamentId != null) 'tournament_id': tournamentId,
+      'content': content,
+      'message': content,
+      'body': content,
+    });
+  }
+
+  Future<List<dynamic>> listLobbyChat(String matchId) async {
+    return listEntities('ChatMessage', query: {'match_id': matchId, 'limit': '100'});
+  }
+
+  // ─── Game taxonomy ───────────────────────────────────────
+  Future<List<dynamic>> taxonomyPlatforms() async =>
+      _asList(await request('GET', '/api/public/game-taxonomy/platforms'));
+
+  Future<List<dynamic>> taxonomyGenres({String? platformId}) async {
+    final q = <String, String>{};
+    if (platformId != null) q['platform_id'] = platformId;
+    return _asList(await request('GET', '/api/public/game-taxonomy/genres', query: q.isEmpty ? null : q));
+  }
+
+  Future<List<dynamic>> taxonomyTitles({String? platformId, String? genreId}) async {
+    final q = <String, String>{};
+    if (platformId != null) q['platform_id'] = platformId;
+    if (genreId != null) q['genre_id'] = genreId;
+    return _asList(await request('GET', '/api/public/game-taxonomy/titles', query: q.isEmpty ? null : q));
+  }
+
+  Future<Map<String, dynamic>> publicPricing() async =>
+      _asMap(await request('GET', '/api/public/pricing'));
+
+  Future<Map<String, dynamic>> stripeConnectStatus() async =>
+      _asMap(await request('GET', '/api/payments/stripe-connect-status'));
+
+  Future<List<dynamic>> listAuditLogs({int limit = 50}) async =>
+      listEntities('AuditLog', query: {'limit': '$limit'});
+
+  Future<Map<String, dynamic>> patchTeam(String id, Map<String, dynamic> body) async =>
+      patchEntity('Team', id, body);
+
+  Future<void> deleteTeam(String id) async => deleteEntity('Team', id);
+
+  Future<Map<String, dynamic>> patchFreeAgent(String id, Map<String, dynamic> body) async =>
+      patchEntity('FreeAgent', id, body);
+
+  Future<void> deleteFreeAgent(String id) async => deleteEntity('FreeAgent', id);
+
+  Future<void> deleteCommunityPost(String id) async =>
+      request('DELETE', '/api/community/posts/$id');
+
+  Future<void> pinCommunityPost(String id, bool pinned) async =>
+      request('PATCH', '/api/community/posts/$id/pin', body: {'pinned': pinned});
+
+  Future<Map<String, dynamic>> publicTeam(String id) async =>
+      _asMap(await request('GET', '/api/public/team/$id'));
+
+  Future<Map<String, dynamic>> uploadFile(List<int> bytes, String filename) async {
+    final uri = _u('/api/integrations/upload');
+    final req = http.MultipartRequest('POST', uri);
+    final h = _headers(jsonBody: false);
+    h.remove('Content-Type');
+    req.headers.addAll(h);
+    req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    dynamic data;
+    try {
+      data = res.body.isEmpty ? null : jsonDecode(res.body);
+    } catch (_) {
+      data = {'file_url': null};
+    }
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, data is Map ? (data['error']?.toString() ?? 'Upload failed') : 'Upload failed');
+    }
+    return _asMap(data);
+  }
 }

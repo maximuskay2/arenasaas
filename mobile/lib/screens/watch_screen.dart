@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
 import '../widgets/arena_ui.dart';
+import 'match_center_screen.dart';
 
-/// Watch hub — live matches + open stream (web WatchHub parity).
+/// Watch hub — live matches open in-app Match Center (stream + kill feed).
 class WatchScreen extends StatefulWidget {
   const WatchScreen({super.key});
 
@@ -42,24 +42,10 @@ class _WatchScreenState extends State<WatchScreen> {
     }
   }
 
-  Future<void> _open(String matchId) async {
-    try {
-      final meta = await context.read<ApiClient>().matchWatch(matchId);
-      var url = meta['stream_url']?.toString();
-      final streams = meta['streams'];
-      if ((url == null || url.isEmpty) && streams is List && streams.isNotEmpty) {
-        url = streams.first['stream_url']?.toString();
-      }
-      if (url == null || url.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No stream URL')));
-        return;
-      }
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
+  void _open(String matchId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: matchId)),
+    );
   }
 
   @override

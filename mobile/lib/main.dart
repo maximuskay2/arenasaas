@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/api_client.dart';
 import 'services/push_service.dart';
+import 'services/realtime_service.dart';
 import 'state/auth_state.dart';
 import 'state/hub_state.dart';
 import 'theme.dart';
@@ -12,6 +13,8 @@ import 'screens/community_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/tournament_detail_screen.dart';
 import 'screens/create_tournament_screen.dart';
+import 'screens/match_center_screen.dart';
+import 'screens/match_lobby_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,11 +28,13 @@ class ArenaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = ApiClient();
     final push = PushService(api);
+    final realtime = RealtimeService();
     final hub = HubState();
     return MultiProvider(
       providers: [
         Provider<ApiClient>.value(value: api),
         Provider<PushService>.value(value: push),
+        Provider<RealtimeService>.value(value: realtime),
         ChangeNotifierProvider(create: (_) {
           hub.load();
           return hub;
@@ -51,6 +56,16 @@ class ArenaApp extends StatelessWidget {
                 settings: settings,
               );
             }
+            if (segs.length >= 2 && segs[0] == 'matches') {
+              final id = segs[1];
+              if (segs.length >= 3 && segs[2] == 'live') {
+                return MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: id), settings: settings);
+              }
+              if (segs.length >= 3 && segs[2] == 'lobby') {
+                return MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: id), settings: settings);
+              }
+              return MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: id), settings: settings);
+            }
             if (segs.isNotEmpty && segs[0] == 'create') {
               return MaterialPageRoute(
                 builder: (_) => const CreateTournamentScreen(),
@@ -63,6 +78,12 @@ class ArenaApp extends StatelessWidget {
             if (u.host == 'tournament' && u.pathSegments.isNotEmpty) {
               return MaterialPageRoute(
                 builder: (_) => TournamentDetailScreen(tournamentId: u.pathSegments.first),
+                settings: settings,
+              );
+            }
+            if (u.host == 'match' && u.pathSegments.isNotEmpty) {
+              return MaterialPageRoute(
+                builder: (_) => MatchCenterScreen(matchId: u.pathSegments.first),
                 settings: settings,
               );
             }

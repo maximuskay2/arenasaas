@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/api_client.dart';
+import '../widgets/arena_ui.dart';
+import 'match_center_screen.dart';
 
 class LiveScreen extends StatefulWidget {
   const LiveScreen({super.key});
@@ -40,26 +41,10 @@ class _LiveScreenState extends State<LiveScreen> {
     }
   }
 
-  Future<void> _openWatch(String matchId) async {
-    try {
-      final meta = await context.read<ApiClient>().matchWatch(matchId);
-      final url = meta['stream_url']?.toString() ??
-          ((meta['streams'] is List && (meta['streams'] as List).isNotEmpty)
-              ? (meta['streams'] as List).first['stream_url']?.toString()
-              : null);
-      if (url == null || url.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No stream URL for this match')),
-        );
-        return;
-      }
-      final uri = Uri.parse(url);
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
+  void _openWatch(String matchId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: matchId)),
+    );
   }
 
   @override
@@ -70,11 +55,11 @@ class _LiveScreenState extends State<LiveScreen> {
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
       ),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingBody()
           : error != null
-              ? Center(child: Text(error!))
+              ? EmptyState(message: error!, actionLabel: 'Retry', onAction: _load)
               : matches.isEmpty
-                  ? const Center(child: Text('No live matches right now'))
+                  ? const EmptyState(message: 'No live matches right now')
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.separated(
@@ -84,17 +69,40 @@ class _LiveScreenState extends State<LiveScreen> {
                         itemBuilder: (ctx, i) {
                           final m = Map<String, dynamic>.from(matches[i] as Map);
                           final id = '${m['id'] ?? ''}';
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                '${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
-                                style: const TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              subtitle: Text(
-                                '${m['score_a'] ?? 0} – ${m['score_b'] ?? 0} · ${m['status'] ?? ''}',
-                              ),
-                              trailing: const Icon(Icons.play_circle_outline, color: Color(0xFF00D4FF)),
-                              onTap: id.isEmpty ? null : () => _openWatch(id),
+                          return ArenaCard(
+                            onTap: id.isEmpty ? null : () => _openWatch(id),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.redAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${m['team_a_name'] ?? 'TBD'} vs ${m['team_b_name'] ?? 'TBD'}',
+                                        style: const TextStyle(fontWeight: FontWeight.w700),
+                                      ),
+                                      Text(
+                                        '${m['score_a'] ?? 0} – ${m['score_b'] ?? 0} · ${m['status'] ?? ''}'
+                                            .replaceAll('_', ' '),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.white.withValues(alpha: 0.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.play_circle_outline, color: Color(0xFF00D4FF)),
+                              ],
                             ),
                           );
                         },
