@@ -11,12 +11,19 @@ import 'discover_screen.dart';
 import 'login_screen.dart';
 import 'my_matches_screen.dart';
 import 'my_teams_screen.dart';
+import 'notifications_screen.dart';
+import 'organizer/analytics_screen.dart';
 import 'organizer/disputes_screen.dart';
+import 'organizer/game_templates_screen.dart';
+import 'organizer/league_settings_screen.dart';
 import 'organizer/league_tournaments_screen.dart';
 import 'organizer/ops_board_screen.dart';
+import 'organizer/revenue_screen.dart';
+import 'organizer/teams_manage_screen.dart';
 import 'rankings_screen.dart';
 import 'vault_screen.dart';
 import 'watch_screen.dart';
+import 'watchlist_screen.dart';
 import 'check_in_screen.dart';
 import 'settings_screen.dart';
 import 'free_agents_screen.dart';
@@ -240,6 +247,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 8),
                         QuickLink(
+                          icon: Icons.bookmarks_outlined,
+                          label: 'Watchlist',
+                          subtitle: 'Saved tournaments',
+                          onTap: () => _go(const WatchlistScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.notifications_outlined,
+                          label: 'Notifications',
+                          subtitle: 'Inbox + push',
+                          onTap: () => _go(const NotificationsScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
                           icon: Icons.settings,
                           label: 'Hub settings',
                           subtitle: 'Region, game handles, FCM',
@@ -315,6 +336,41 @@ class _HomeScreenState extends State<HomeScreen> {
                           label: 'Disputes',
                           subtitle: 'Resolve contested results',
                           onTap: () => _go(const DisputesScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.groups_3,
+                          label: 'Teams management',
+                          subtitle: 'Seed, roster, kick',
+                          onTap: () => _go(const TeamsManageScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.sports_esports,
+                          label: 'Game templates',
+                          subtitle: 'CRUD templates',
+                          onTap: () => _go(const GameTemplatesScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.payments,
+                          label: 'Revenue',
+                          subtitle: 'Ledger & wallets',
+                          onTap: () => _go(const RevenueScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.insights,
+                          label: 'Analytics',
+                          subtitle: 'Pulse & viewership',
+                          onTap: () => _go(const AnalyticsScreen()),
+                        ),
+                        const SizedBox(height: 8),
+                        QuickLink(
+                          icon: Icons.settings_suggest,
+                          label: 'League settings',
+                          subtitle: 'Branding & Connect',
+                          onTap: () => _go(const LeagueSettingsScreen()),
                         ),
                         const SizedBox(height: 8),
                         QuickLink(

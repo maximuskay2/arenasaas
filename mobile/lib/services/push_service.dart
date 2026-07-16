@@ -33,6 +33,9 @@ class PushService {
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<RemoteMessage>? _foregroundSub;
 
+  /// Optional UI hook for foreground messages (set from MaterialApp).
+  void Function(RemoteMessage message)? onForegroundMessage;
+
   bool get isReady => _ready;
   bool get isConfigured => DefaultFirebaseOptions.isConfigured;
 
@@ -107,6 +110,7 @@ class PushService {
       await _foregroundSub?.cancel();
       _foregroundSub = FirebaseMessaging.onMessage.listen((msg) {
         debugPrint('[FCM] foreground: ${msg.notification?.title} ${msg.data}');
+        onForegroundMessage?.call(msg);
       });
 
       if (requireAuth && (api.token == null || api.token!.isEmpty)) {

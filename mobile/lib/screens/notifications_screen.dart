@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../navigation/deep_link.dart';
 import '../services/api_client.dart';
 import '../services/push_service.dart';
 import '../state/auth_state.dart';
@@ -94,13 +95,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             itemBuilder: (ctx, i) {
                               final n = Map<String, dynamic>.from(items[i] as Map);
                               final id = n['id']?.toString();
+                              final payload = Map<String, dynamic>.from(
+                                n['data'] is Map
+                                    ? n['data'] as Map
+                                    : n['payload'] is Map
+                                        ? n['payload'] as Map
+                                        : n,
+                              );
                               return ArenaCard(
-                                onTap: id == null
-                                    ? null
-                                    : () async {
-                                        await context.read<ApiClient>().markNotificationRead(id);
-                                        _load();
-                                      },
+                                onTap: () async {
+                                  if (id != null) {
+                                    try {
+                                      await context.read<ApiClient>().markNotificationRead(id);
+                                    } catch (_) {}
+                                  }
+                                  if (!mounted) return;
+                                  final page = DeepLink.pageForPayload(payload);
+                                  if (page != null) {
+                                    DeepLink.open(context, page);
+                                  } else {
+                                    _load();
+                                  }
+                                },
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [

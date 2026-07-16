@@ -1,5 +1,13 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'firebase_options.dart';
+import 'navigation/deep_link.dart';
 import 'services/api_client.dart';
 import 'services/push_service.dart';
 import 'services/realtime_service.dart';
@@ -11,85 +19,131 @@ import 'screens/discover_screen.dart';
 import 'screens/my_matches_screen.dart';
 import 'screens/community_screen.dart';
 import 'screens/more_screen.dart';
-import 'screens/tournament_detail_screen.dart';
 import 'screens/create_tournament_screen.dart';
-import 'screens/match_center_screen.dart';
-import 'screens/match_lobby_screen.dart';
+
+final GlobalKey<NavigatorState> arenaNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ArenaApp());
 }
 
-class ArenaApp extends StatelessWidget {
+class ArenaApp extends StatefulWidget {
   const ArenaApp({super.key});
 
   @override
+  State<ArenaApp> createState() => _ArenaAppState();
+}
+
+class _ArenaAppState extends State<ArenaApp> {
+  late final ApiClient _api;
+  late final PushService _push;
+  late final RealtimeService _realtime;
+  late final HubState _hub;
+  StreamSubscription<Uri>? _linkSub;
+  final _appLinks = AppLinks();
+
+  @override
+  void initState() {
+    super.initState();
+    _api = ApiClient();
+    _push = PushService(_api);
+    _realtime = RealtimeService();
+    _hub = HubState()..load();
+    _bootDeepLinks();
+    _bootPushNavigation();
+  }
+
+  Future<void> _bootDeepLinks() async {
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _handleUri(initial));
+      }
+    } catch (e) {
+      debugPrint('[deep_link] initial: $e');
+    }
+    _linkSub = _appLinks.uriLinkStream.listen(
+      _handleUri,
+      onError: (e) => debugPrint('[deep_link] stream: $e'),
+    );
+  }
+
+  void _bootPushNavigation() {
+    _push.onForegroundMessage = (msg) {
+      final title = msg.notification?.title ?? 'Arena';
+      final body = msg.notification?.body ?? '';
+      final ctx = arenaNavigatorKey.currentContext;
+      if (ctx == null) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text(body.isEmpty ? title : '$title — $body'),
+          action: SnackBarAction(
+            label: 'Open',
+            onPressed: () => _handlePayload(Map<String, dynamic>.from(msg.data)),
+          ),
+        ),
+      );
+    };
+
+    // Only touch Firebase Messaging when a project is configured
+    if (!DefaultFirebaseOptions.isConfigured) return;
+    try {
+      FirebaseMessaging.instance.getInitialMessage().then((msg) {
+        if (msg == null) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handlePayload(Map<String, dynamic>.from(msg.data));
+        });
+      }).catchError((Object e) {
+        debugPrint('[FCM] getInitialMessage: $e');
+      });
+
+      FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+        _handlePayload(Map<String, dynamic>.from(msg.data));
+      });
+    } catch (e) {
+      debugPrint('[FCM] boot navigation: $e');
+    }
+  }
+
+  void _handleUri(Uri uri) {
+    final nav = arenaNavigatorKey.currentState;
+    final page = DeepLink.pageForUri(uri);
+    if (nav == null || page == null) return;
+    nav.push(MaterialPageRoute(builder: (_) => page));
+  }
+
+  void _handlePayload(Map<String, dynamic> data) {
+    final nav = arenaNavigatorKey.currentState;
+    final page = DeepLink.pageForPayload(data);
+    if (nav == null || page == null) return;
+    nav.push(MaterialPageRoute(builder: (_) => page));
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    _realtime.dispose();
+    _push.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final api = ApiClient();
-    final push = PushService(api);
-    final realtime = RealtimeService();
-    final hub = HubState();
     return MultiProvider(
       providers: [
-        Provider<ApiClient>.value(value: api),
-        Provider<PushService>.value(value: push),
-        Provider<RealtimeService>.value(value: realtime),
-        ChangeNotifierProvider(create: (_) {
-          hub.load();
-          return hub;
-        }),
-        ChangeNotifierProvider(create: (_) => AuthState(api, push: push)..bootstrap()),
+        Provider<ApiClient>.value(value: _api),
+        Provider<PushService>.value(value: _push),
+        Provider<RealtimeService>.value(value: _realtime),
+        ChangeNotifierProvider.value(value: _hub),
+        ChangeNotifierProvider(create: (_) => AuthState(_api, push: _push)..bootstrap()),
       ],
       child: MaterialApp(
+        navigatorKey: arenaNavigatorKey,
         title: 'Arena',
         debugShowCheckedModeBanner: false,
         theme: ArenaTheme.dark(),
-        onGenerateRoute: (settings) {
-          final name = settings.name ?? '';
-          final uri = Uri.tryParse(name);
-          if (uri != null) {
-            final segs = uri.pathSegments;
-            if (segs.length >= 2 && (segs[0] == 'tournaments' || segs[0] == 'tournament')) {
-              return MaterialPageRoute(
-                builder: (_) => TournamentDetailScreen(tournamentId: segs[1]),
-                settings: settings,
-              );
-            }
-            if (segs.length >= 2 && segs[0] == 'matches') {
-              final id = segs[1];
-              if (segs.length >= 3 && segs[2] == 'live') {
-                return MaterialPageRoute(builder: (_) => MatchCenterScreen(matchId: id), settings: settings);
-              }
-              if (segs.length >= 3 && segs[2] == 'lobby') {
-                return MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: id), settings: settings);
-              }
-              return MaterialPageRoute(builder: (_) => MatchLobbyScreen(matchId: id), settings: settings);
-            }
-            if (segs.isNotEmpty && segs[0] == 'create') {
-              return MaterialPageRoute(
-                builder: (_) => const CreateTournamentScreen(),
-                settings: settings,
-              );
-            }
-          }
-          if (name.startsWith('arenasaas://')) {
-            final u = Uri.parse(name);
-            if (u.host == 'tournament' && u.pathSegments.isNotEmpty) {
-              return MaterialPageRoute(
-                builder: (_) => TournamentDetailScreen(tournamentId: u.pathSegments.first),
-                settings: settings,
-              );
-            }
-            if (u.host == 'match' && u.pathSegments.isNotEmpty) {
-              return MaterialPageRoute(
-                builder: (_) => MatchCenterScreen(matchId: u.pathSegments.first),
-                settings: settings,
-              );
-            }
-          }
-          return null;
-        },
+        onGenerateRoute: DeepLink.routeForSettings,
         home: const HomeShell(),
       ),
     );
@@ -118,7 +172,6 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Keep platform admin / pure players out of organizer hub if prefs were stale
     final auth = context.read<AuthState>();
     final hub = context.read<HubState>();
     if (!auth.loading) {
@@ -130,7 +183,6 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthState>();
     return Scaffold(
-      // League organizers only — platform God-view admin stays on web
       floatingActionButton: auth.isLeagueHost
           ? FloatingActionButton(
               onPressed: () {

@@ -61,12 +61,17 @@ flutter run --dart-define=API_BASE=http://10.0.2.2:3001
 flutter run --dart-define=API_BASE=http://192.168.x.x:3001
 ```
 
-Firebase push (optional production): [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).
+Firebase push (optional production): [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).  
+Release checklist: [docs/RELEASE.md](docs/RELEASE.md).
 
-### Analyze
+### Analyze / test / build
 
 ```bash
-cd mobile && flutter analyze
+cd mobile
+flutter analyze
+flutter test
+flutter build apk --debug   # device smoke
+# Store: see docs/RELEASE.md
 ```
 
-Expect only info-level lints (deprecated DropdownButtonFormField `value`, async context infos). No errors/warnings required for release candidates.
+Expect only info-level lints. No errors/warnings required for release candidates.

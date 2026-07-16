@@ -1,7 +1,7 @@
 name: arena_mobile
 description: Arena-SaaS multi-tenant esports client (player hub, discovery, matches).
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.10.7
@@ -26,6 +26,7 @@ dependencies:
   image_picker: ^1.1.2
   http_parser: ^4.0.2
   collection: ^1.18.0
+  app_links: ^7.0.0
 
 dev_dependencies:
   flutter_test:
