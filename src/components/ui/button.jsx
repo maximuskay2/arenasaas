@@ -20,7 +20,8 @@ const buttonVariants = cva(
         ghost: "hover:bg-secondary/70 hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         arena:
-          "bg-gradient-to-r from-primary via-primary to-cyan-300 text-primary-foreground font-display text-xs uppercase tracking-wider shadow-arena-glow hover:brightness-110",
+          // Solid primary fill (gradient alone can fail if --primary is invalid)
+          "bg-primary text-primary-foreground font-display text-xs uppercase tracking-wider shadow-arena-glow hover:brightness-110 border border-primary/50",
         accent:
           "bg-accent text-accent-foreground font-display text-xs uppercase tracking-wider shadow-[0_0_24px_hsl(var(--accent)/0.35)] hover:brightness-110",
       },

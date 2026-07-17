@@ -116,8 +116,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-hero selection:bg-primary/30 px-6 relative overflow-hidden">
-      <div className="absolute inset-0 z-0">
+    <div className="min-h-screen flex items-start sm:items-center justify-center bg-gradient-hero selection:bg-primary/30 px-4 sm:px-6 py-8 sm:py-12 relative overflow-x-hidden overflow-y-auto">
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
         <div className="absolute top-[-15%] left-[-10%] w-[55%] h-[55%] bg-primary/15 blur-[140px] rounded-full" />
         <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] bg-accent/12 blur-[120px] rounded-full" />
         <div
@@ -135,7 +135,7 @@ export default function Login() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-[440px] relative z-10"
+        className="w-full max-w-[440px] relative z-10 my-auto"
       >
         <div className="mb-8 flex items-center justify-between gap-3">
           <Link
@@ -236,7 +236,13 @@ export default function Login() {
               )}
             </AnimatePresence>
 
-            <Button type="submit" className="w-full h-12" size="lg" variant="arena" disabled={loading}>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={loading}
+              data-testid="login-submit"
+              className="btn-arena-primary w-full h-12 min-h-12 shrink-0 relative z-20 !bg-[#00d4ff] !text-[#070a12] hover:!bg-[#33ddff] border-0 shadow-[0_0_28px_rgba(0,212,255,0.45)] font-display text-xs font-bold uppercase tracking-wider"
+            >
               {loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />

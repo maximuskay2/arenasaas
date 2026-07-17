@@ -282,14 +282,25 @@
   }
 
   .btn-arena-primary {
-    @apply btn-arena bg-primary text-primary-foreground shadow-lg;
-    box-shadow: 0 0 24px hsl(var(--primary) / 0.35), 0 4px 16px hsl(0 0% 0% / 0.3);
+    @apply btn-arena shadow-lg;
+    /* Explicit fallbacks so button never inherits transparent preflight if --primary is broken */
+    background-color: #00d4ff;
+    background-color: hsl(var(--primary, 186 100% 48%));
+    color: #070a12;
+    color: hsl(var(--primary-foreground, 230 35% 4%));
+    box-shadow: 0 0 24px hsl(var(--primary, 186 100% 48%) / 0.35), 0 4px 16px hsl(0 0% 0% / 0.3);
   }
 
   .btn-arena-primary:hover {
     filter: brightness(1.08);
-    box-shadow: 0 0 36px hsl(var(--primary) / 0.5), 0 6px 20px hsl(0 0% 0% / 0.35);
+    box-shadow: 0 0 36px hsl(var(--primary, 186 100% 48%) / 0.5), 0 6px 20px hsl(0 0% 0% / 0.35);
     transform: translateY(-1px);
+  }
+
+  .btn-arena-primary:disabled {
+    filter: none;
+    opacity: 0.55;
+    transform: none;
   }
 
   .section-label {

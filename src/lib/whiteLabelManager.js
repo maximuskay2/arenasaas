@@ -2,41 +2,91 @@ import { maxikay } from "@/api/maxikayClient";
 import { getTenantSlug } from "./routingLogic";
 
 /**
- * White-label CSS override system
- * Dynamically applies tenant branding to the platform
+ * White-label CSS override system.
+ * Tailwind tokens use bare HSL channels: --primary: 186 100% 48%;
+ * then colors are applied as hsl(var(--primary)). Never inject full hsl(...).
  */
+
+/** Normalize hex / hsl(...) / "h s% l%" → "h s% l%" for CSS variables. */
+export function toHslChannels(color) {
+  if (color == null || color === "") return null;
+  const s = String(color).trim();
+
+  // Already channel form: "186 100% 48%" or "186, 100%, 48%"
+  const bare = s.match(/^(\d+(?:\.\d+)?)\s*[,\s]\s*(\d+(?:\.\d+)?)%?\s*[,\s]\s*(\d+(?:\.\d+)?)%?$/);
+  if (bare && !s.toLowerCase().includes("hsl") && !s.startsWith("#")) {
+    return `${bare[1]} ${bare[2]}% ${bare[3]}%`;
+  }
+
+  // hsl(186 100% 48%) / hsl(186, 100%, 48%) / hsla(...)
+  const hsl = s.match(
+    /hsla?\(\s*([0-9.]+)\s*[, ]\s*([0-9.]+)%?\s*[, ]\s*([0-9.]+)%?/i
+  );
+  if (hsl) {
+    return `${hsl[1]} ${hsl[2]}% ${hsl[3]}%`;
+  }
+
+  // #rgb / #rrggbb
+  let hex = s.replace("#", "");
+  if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+    hex = hex
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let sat = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      default:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+
+  return `${Math.round(h * 360)} ${Math.round(sat * 100)}% ${Math.round(l * 100)}%`;
+}
 
 export async function applyTenantBranding() {
   const tenantSlug = getTenantSlug();
   if (!tenantSlug) {
-    // Public site - use default branding
-    applyBranding({
-      primary: "hsl(190 100% 50%)",
-      secondary: "hsl(222 30% 14%)",
-      accent: "hsl(348 83% 60%)",
-      displayFont: "Orbitron",
-    });
+    // Public / default site — leave :root tokens from index.css alone
+    clearBrandingOverrides();
     return;
   }
 
   try {
-    // Fetch tenant config
     const configs = await maxikay.entities.TenantConfig.filter(
-      { custom_domain: { $exists: false } }, // Use slug matching instead
+      { custom_domain: { $exists: false } },
       "-updated_date",
       1
     );
 
-    const config = configs.find((c) => {
-      // Match by tenant_id or from cached tenant lookup
-      return c.tenant_id; // Will be populated by lookup
-    });
+    const config = configs.find((c) => c.tenant_id);
 
     if (config) {
       applyBranding({
-        primary: config.primary_color || "hsl(190 100% 50%)",
-        secondary: config.secondary_color || "hsl(222 30% 14%)",
-        accent: config.accent_color || "hsl(348 83% 60%)",
+        primary: config.primary_color,
+        secondary: config.secondary_color,
+        accent: config.accent_color,
         displayFont: config.display_font || "Orbitron",
         logoUrl: config.logo_url,
       });
@@ -46,8 +96,12 @@ export async function applyTenantBranding() {
   }
 }
 
+function clearBrandingOverrides() {
+  const styleEl = document.getElementById("tenant-branding");
+  if (styleEl) styleEl.textContent = "";
+}
+
 function applyBranding({ primary, secondary, accent, displayFont, logoUrl }) {
-  // Create or update CSS variable stylesheet
   let styleEl = document.getElementById("tenant-branding");
   if (!styleEl) {
     styleEl = document.createElement("style");
@@ -55,60 +109,36 @@ function applyBranding({ primary, secondary, accent, displayFont, logoUrl }) {
     document.head.appendChild(styleEl);
   }
 
-  const css = `
-    :root {
-      --primary: ${hexToHsl(primary)};
-      --accent: ${hexToHsl(accent)};
-      --secondary: ${hexToHsl(secondary)};
-      --font-display: '${displayFont}', system-ui, sans-serif;
-    }
-  `;
+  const p = toHslChannels(primary);
+  const a = toHslChannels(accent);
+  const sec = toHslChannels(secondary);
+  const font = (displayFont || "Orbitron").replace(/['"]/g, "");
 
-  styleEl.textContent = css;
+  const lines = [":root {"];
+  if (p) {
+    lines.push(`  --primary: ${p};`);
+    lines.push(`  --ring: ${p};`);
+    lines.push(`  --sidebar-primary: ${p};`);
+    lines.push(`  --sidebar-ring: ${p};`);
+    lines.push(`  --chart-1: ${p};`);
+  }
+  if (a) {
+    lines.push(`  --accent: ${a};`);
+    lines.push(`  --chart-2: ${a};`);
+  }
+  if (sec) {
+    lines.push(`  --secondary: ${sec};`);
+  }
+  if (font) {
+    lines.push(`  --font-display: '${font}', system-ui, sans-serif;`);
+  }
+  lines.push("}");
 
-  // Update favicon if tenant has custom logo
+  styleEl.textContent = lines.join("\n");
+
   if (logoUrl) {
     updateFavicon(logoUrl);
   }
-}
-
-function hexToHsl(hex) {
-  // If already HSL format, return as-is
-  if (hex.includes("hsl")) return hex;
-
-  // Convert hex to HSL
-  hex = hex.replace("#", "");
-  const r = parseInt(hex.substring(0, 2), 16) / 255;
-  const g = parseInt(hex.substring(2, 4), 16) / 255;
-  const b = parseInt(hex.substring(4, 6), 16) / 255;
-
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h, s, l = (max + min) / 2;
-
-  if (max === min) {
-    h = s = 0;
-  } else {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-        break;
-      case g:
-        h = ((b - r) / d + 2) / 6;
-        break;
-      case b:
-        h = ((r - g) / d + 4) / 6;
-        break;
-    }
-  }
-
-  const hDeg = Math.round(h * 360);
-  const sPercent = Math.round(s * 100);
-  const lPercent = Math.round(l * 100);
-
-  return `${hDeg} ${sPercent}% ${lPercent}%`;
 }
 
 function updateFavicon(logoUrl) {
@@ -123,7 +153,6 @@ function updateFavicon(logoUrl) {
 
 /**
  * System admin override - force branding on a tenant
- * (for violations, testing, etc.)
  */
 export async function overrideTenantBranding(tenantId, overrideConfig) {
   try {
@@ -134,7 +163,6 @@ export async function overrideTenantBranding(tenantId, overrideConfig) {
       display_font: overrideConfig.displayFont,
     });
 
-    // Reapply branding
     applyTenantBranding();
   } catch (err) {
     console.error("Failed to override branding:", err);
