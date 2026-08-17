@@ -1,0 +1,29 @@
+{
+  "name": "OTPRecord",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "Email to verify"
+    },
+    "code": {
+      "type": "string",
+      "description": "6-digit OTP code"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When OTP expires"
+    },
+    "used": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether OTP has been used"
+    }
+  },
+  "required": [
+    "email",
+    "code",
+    "expires_at"
+  ]
+}

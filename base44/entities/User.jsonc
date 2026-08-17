@@ -1,0 +1,86 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "stripe_customer_id": {
+      "type": "string",
+      "description": "Stripe customer ID for subscription billing"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "organizer",
+        "player",
+        "spectator"
+      ],
+      "default": "player",
+      "description": "User role in tournaments"
+    },
+    "bio": {
+      "type": "string",
+      "description": "User biography for recruitment cards"
+    },
+    "avatar_url": {
+      "type": "string",
+      "description": "Profile picture URL"
+    },
+    "preferred_games": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Games user plays competitively"
+    },
+    "region": {
+      "type": "string",
+      "enum": [
+        "NA",
+        "EU",
+        "LATAM",
+        "ASIA",
+        "OCE",
+        "AF",
+        "ME"
+      ],
+      "default": "NA"
+    },
+    "discord_handle": {
+      "type": "string",
+      "description": "Discord username for team communication"
+    },
+    "twitch_handle": {
+      "type": "string"
+    },
+    "phone_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "email_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "account_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "banned"
+      ],
+      "default": "active"
+    },
+    "last_login": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "stripe_customer_id",
+    "bio",
+    "avatar_url",
+    "preferred_games",
+    "discord_handle",
+    "twitch_handle",
+    "last_login"
+  ]
+}

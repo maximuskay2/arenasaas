@@ -1,0 +1,44 @@
+{
+  "name": "GameTemplate",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Game name (e.g. Valorant, League of Legends)"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "Game logo image URL"
+    },
+    "roster_size": {
+      "type": "number",
+      "description": "Number of players per team"
+    },
+    "scoring_mode": {
+      "type": "string",
+      "enum": [
+        "best_of_1",
+        "best_of_3",
+        "best_of_5",
+        "points"
+      ],
+      "description": "How matches are scored"
+    },
+    "map_pool": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Available maps for this game"
+    },
+    "rules_json": {
+      "type": "string",
+      "description": "JSON string of game-specific rules"
+    }
+  },
+  "required": [
+    "title",
+    "roster_size",
+    "scoring_mode"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "name": "TenantConfig",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Reference to Tenant entity"
+    },
+    "tenant_name": {
+      "type": "string",
+      "description": "Organization display name"
+    },
+    "logo_url": {
+      "type": "string",
+      "default": "https://mails.bybata.com/logomail.png"
+    },
+    "favicon_url": {
+      "type": "string"
+    },
+    "primary_color": {
+      "type": "string",
+      "default": "#00d4ff"
+    },
+    "secondary_color": {
+      "type": "string",
+      "default": "#0a0e1a"
+    },
+    "accent_color": {
+      "type": "string",
+      "default": "#ff4655"
+    },
+    "custom_domain": {
+      "type": "string"
+    },
+    "display_font": {
+      "type": "string",
+      "default": "Orbitron"
+    },
+    "discord_webhook_url": {
+      "type": "string",
+      "description": "Discord webhook for notifications"
+    },
+    "stripe_account_id": {
+      "type": "string",
+      "description": "Stripe Connect account ID for payouts"
+    },
+    "stripe_customer_id": {
+      "type": "string",
+      "description": "Stripe customer ID for subscription billing"
+    },
+    "social_links": {
+      "type": "object",
+      "properties": {
+        "twitter": {
+          "type": "string"
+        },
+        "discord": {
+          "type": "string"
+        },
+        "twitch": {
+          "type": "string"
+        },
+        "youtube": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "tenant_name"
+  ]
+}

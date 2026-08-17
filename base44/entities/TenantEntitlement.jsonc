@@ -1,0 +1,39 @@
+{
+  "name": "TenantEntitlement",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Reference to Tenant"
+    },
+    "plan_type": {
+      "type": "string",
+      "enum": [
+        "monthly",
+        "one_shot"
+      ],
+      "default": "one_shot"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the subscription/purchase is active"
+    },
+    "single_tournament_remaining": {
+      "type": "number",
+      "default": 0,
+      "description": "Credits left for one-shot plan"
+    },
+    "subscription_expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "plan_type"
+  ]
+}

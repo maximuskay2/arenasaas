@@ -1,0 +1,118 @@
+{
+  "name": "Match",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Tenant this match belongs to"
+    },
+    "tournament_id": {
+      "type": "string",
+      "description": "Parent tournament"
+    },
+    "round": {
+      "type": "number",
+      "description": "Round number (1-based)"
+    },
+    "match_number": {
+      "type": "number"
+    },
+    "bracket_position": {
+      "type": "string"
+    },
+    "team_a_id": {
+      "type": "string"
+    },
+    "team_a_name": {
+      "type": "string"
+    },
+    "team_b_id": {
+      "type": "string"
+    },
+    "team_b_name": {
+      "type": "string"
+    },
+    "score_a": {
+      "type": "number",
+      "default": 0
+    },
+    "score_b": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "check_in_open",
+        "checked_in",
+        "in_progress",
+        "under_dispute",
+        "completed",
+        "forfeited",
+        "no_show"
+      ],
+      "default": "pending"
+    },
+    "winner_id": {
+      "type": "string"
+    },
+    "winner_name": {
+      "type": "string"
+    },
+    "next_match_id": {
+      "type": "string"
+    },
+    "scheduled_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "check_in_deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "team_a_checked_in": {
+      "type": "boolean",
+      "default": false
+    },
+    "team_b_checked_in": {
+      "type": "boolean",
+      "default": false
+    },
+    "version": {
+      "type": "number",
+      "default": 1,
+      "description": "Optimistic locking version"
+    },
+    "maps_played": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "map_name": {
+            "type": "string"
+          },
+          "score_a": {
+            "type": "number"
+          },
+          "score_b": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "stream_url": {
+      "type": "string",
+      "description": "Match-specific Twitch or YouTube stream URL"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tournament_id",
+    "round",
+    "match_number",
+    "status"
+  ]
+}

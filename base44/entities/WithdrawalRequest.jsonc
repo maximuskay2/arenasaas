@@ -1,0 +1,50 @@
+{
+  "name": "WithdrawalRequest",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string"
+    },
+    "amount_requested": {
+      "type": "number"
+    },
+    "fee_percent": {
+      "type": "number"
+    },
+    "fee_fixed": {
+      "type": "number",
+      "default": 0
+    },
+    "net_amount": {
+      "type": "number",
+      "description": "Amount after fees"
+    },
+    "currency": {
+      "type": "string",
+      "default": "USD"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "paid"
+      ],
+      "default": "pending"
+    },
+    "payout_reference": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "reviewed_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "tenant_id",
+    "amount_requested"
+  ]
+}

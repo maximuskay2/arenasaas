@@ -1,0 +1,69 @@
+{
+  "name": "FeedPost",
+  "type": "object",
+  "properties": {
+    "tournament_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "author_email": {
+      "type": "string"
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "organizer",
+        "player",
+        "spectator"
+      ],
+      "default": "player"
+    },
+    "content": {
+      "type": "string"
+    },
+    "media_url": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "video",
+        "clip"
+      ]
+    },
+    "match_id": {
+      "type": "string"
+    },
+    "likes": {
+      "type": "number",
+      "default": 0
+    },
+    "fire": {
+      "type": "number",
+      "default": 0
+    },
+    "claps": {
+      "type": "number",
+      "default": 0
+    },
+    "party": {
+      "type": "number",
+      "default": 0
+    },
+    "pinned": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "tournament_id",
+    "author_email",
+    "content"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "name": "RescheduleRequest",
+  "type": "object",
+  "properties": {
+    "match_id": {
+      "type": "string"
+    },
+    "tournament_id": {
+      "type": "string"
+    },
+    "tenant_id": {
+      "type": "string"
+    },
+    "requested_by_email": {
+      "type": "string"
+    },
+    "requested_by_team": {
+      "type": "string"
+    },
+    "proposed_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "review_notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "match_id",
+    "requested_by_email",
+    "proposed_time"
+  ]
+}

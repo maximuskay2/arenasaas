@@ -1,0 +1,71 @@
+{
+  "name": "Team",
+  "type": "object",
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "description": "Tenant this team belongs to"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tag": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "captain_email": {
+      "type": "string"
+    },
+    "roster": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "player_name": {
+            "type": "string"
+          },
+          "player_email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "game_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tournament_id": {
+      "type": "string"
+    },
+    "seed": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "checked_in",
+        "eliminated",
+        "winner"
+      ],
+      "default": "registered"
+    },
+    "wins": {
+      "type": "number",
+      "default": 0
+    },
+    "losses": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "name",
+    "tag",
+    "tournament_id"
+  ]
+}

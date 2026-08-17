@@ -1,0 +1,77 @@
+{
+  "name": "Tenant",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Organization display name"
+    },
+    "slug": {
+      "type": "string",
+      "description": "URL-safe subdomain slug (e.g. 'esl', 'faceit')"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "free",
+        "starter",
+        "pro",
+        "enterprise"
+      ],
+      "default": "free"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "pending",
+        "cancelled"
+      ],
+      "default": "active"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Primary owner email"
+    },
+    "logo_url": {
+      "type": "string",
+      "default": "https://mails.bybata.com/logomail.png"
+    },
+    "custom_domain": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string",
+      "enum": [
+        "us",
+        "eu",
+        "asia",
+        "africa",
+        "latam"
+      ],
+      "default": "us"
+    },
+    "payment_provider": {
+      "type": "string",
+      "enum": [
+        "stripe",
+        "paystack",
+        "flutterwave"
+      ],
+      "default": "stripe"
+    },
+    "max_tournaments": {
+      "type": "number",
+      "default": 5
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "slug",
+    "owner_email"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "FeedComment",
+  "type": "object",
+  "properties": {
+    "post_id": {
+      "type": "string"
+    },
+    "tournament_id": {
+      "type": "string"
+    },
+    "author_email": {
+      "type": "string"
+    },
+    "author_name": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "organizer",
+        "player",
+        "spectator"
+      ],
+      "default": "player"
+    }
+  },
+  "required": [
+    "post_id",
+    "author_email",
+    "content"
+  ]
+}

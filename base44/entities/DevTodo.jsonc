@@ -1,0 +1,37 @@
+{
+  "name": "DevTodo",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "done"
+      ],
+      "default": "pending"
+    },
+    "category": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "priority"
+  ]
+}
